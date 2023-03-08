@@ -7,8 +7,30 @@ val sidechainsZkVersion = "0.0.1"
 
 val rootDirectory = file(".")
 
+sbtJniCoreScope := Compile
+
+lazy val jubjubNative = project
+  .in(file("jubjub-native"))
+  .settings(
+    nativeCompile / sourceDirectory := sourceDirectory.value / "native"
+  )
+  .enablePlugins(JniNative)
+
+lazy val jubjubBindings = project
+  .in(file("jubjub-bindings"))
+  .settings(commonSettings("jubjub-bindings"))
+  .settings(libraryDependencies ++= Dependencies.testing)
+  .dependsOn(jubjubNative)
+
 lazy val root = project
   .in(rootDirectory)
+  .settings(
+    name := "sidechains-zk"
+  )
+  .aggregate(
+    jubjubNative,
+    jubjubBindings
+  )
 
 val baseScalacOptions = Seq(
   "-unchecked",
