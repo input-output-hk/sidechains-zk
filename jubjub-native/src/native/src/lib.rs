@@ -2,6 +2,11 @@ use jni::JNIEnv;
 use jni::objects::JObject;
 use jni::sys::{jbyteArray, jobjectArray};
 
+use crate::conversions::{byte_array_from_java, byte_array_to_java, return_or_throw};
+
+mod conversions;
+
+
 #[no_mangle]
 pub extern "system" fn Java_io_iohk_sidechains_jubjub_JubjubJniBindings_createKey(
     env: JNIEnv,
@@ -13,22 +18,30 @@ pub extern "system" fn Java_io_iohk_sidechains_jubjub_JubjubJniBindings_createKe
 
 #[no_mangle]
 pub extern "system" fn Java_io_iohk_sidechains_jubjub_JubjubJniBindings_sign(
-    _env: JNIEnv,
+    env: JNIEnv,
     _object: JObject,
     data: jbyteArray,
     _key: jbyteArray,
 ) -> jbyteArray {
-    return data;
+    let result: Result<jbyteArray, jni::errors::Error> =
+        byte_array_from_java(env, data)
+            .and_then(|native| byte_array_to_java(env, &native));
+
+    return_or_throw(env, result)
 }
 
 
 #[no_mangle]
 pub extern "system" fn Java_io_iohk_sidechains_jubjub_JubjubJniBindings_createProof(
-    _env: JNIEnv,
+    env: JNIEnv,
     _object: JObject,
     data: jbyteArray,
     _signatures: jobjectArray,
     _keys: jobjectArray,
 ) -> jbyteArray {
-    return data;
+    let result: Result<jbyteArray, jni::errors::Error> =
+        byte_array_from_java(env, data)
+            .and_then(|native| byte_array_to_java(env, &native));
+
+    return_or_throw(env, result)
 }
