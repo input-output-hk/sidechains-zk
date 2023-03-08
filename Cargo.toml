@@ -1,0 +1,13 @@
+[package]
+name = "atms-halo2"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "atms_halo2"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[dependencies]
+jubjub = "0.10.0"
+poseidon = { git = "https://github.com/iquerejeta/Poseidon252"}
+bls12_381 = "0.8.0"
