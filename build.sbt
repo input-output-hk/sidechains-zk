@@ -106,12 +106,6 @@ inThisBuild(
         name = "Nikolaos Dymitriadis",
         email = "nikolaos.dymitriadis@iohk.io",
         url = url("https://github.com/AmbientTea")
-      ),
-      Developer(
-        id = "LGLO",
-        name = "Lech Głowiak",
-        email = "lech.glowiak@iohk.io",
-        url = url("https://github.com/LGLO")
       )
     ),
     homepage := Some(url("https://github.com/input-output-hk")),
