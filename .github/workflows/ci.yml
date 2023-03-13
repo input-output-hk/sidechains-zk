@@ -49,6 +49,7 @@ jobs:
 
       - run: sbt ++${{ matrix.scala }} validate
 
+      - run: ls -la
       - name: Compress target directories
         run: tar cf targets.tar target jubjub-native/target jubjub-bindings/target project/target
 
