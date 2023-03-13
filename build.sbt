@@ -32,6 +32,7 @@ lazy val publicationSettings = List(
 lazy val jubjubNative = project
   .in(file("jubjub-native"))
   .settings(
+    name := "jubjub-native",
     nativeCompile / sourceDirectory := sourceDirectory.value / "native"
   )
   .settings(publicationSettings)
