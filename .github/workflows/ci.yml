@@ -101,6 +101,7 @@ jobs:
         with:
           name: target-${{ matrix.os }}-2.13.10-${{ matrix.java }}
 
+      - run: ls -la
       - name: Inflate target directories (2.13.10)
         run: |
           tar xf jubjub/targets.tar
