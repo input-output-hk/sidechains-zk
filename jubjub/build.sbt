@@ -132,38 +132,6 @@ inThisBuild(
   )
 )
 
-// For sbt-github-actions plugin
-//inThisBuild(
-//  List(
-//    githubWorkflowJavaVersions := List(JavaSpec.temurin("19.0.2+7")),
-//    githubWorkflowTargetTags ++= List("v*"),
-//    githubWorkflowBuild := Seq(WorkflowStep.Sbt(List("validate"))),
-//    githubWorkflowPublishPreamble := List(
-//      WorkflowStep.Run(
-//        commands = List(
-//          "gpg --version",
-//          """cat <(echo "${{ secrets.GPG_SECRET_KEY }}") | base64 --decode | gpg --batch --import"""
-//        ),
-//        name = Some("Prepare gpg for 'sbt publish'"),
-//        cond = Some("contains(github.ref, 'v')")
-//      )
-//    ),
-//    githubWorkflowPublish := List(
-//      WorkflowStep.Run(
-//        commands = List("sbt -Dsbt.gigahorse=false publish"),
-//        env =
-//          Map("NEXUS_USERNAME" -> "${{ secrets.NEXUS_USERNAME }}", "NEXUS_PASSWORD" -> "${{ secrets.NEXUS_PASSWORD }}"),
-//        name = Some("Publish jars"),
-//        cond = Some("contains(github.ref, 'v')")
-//      )
-//    ),
-//    githubWorkflowPublishCond := Some("!contains(github.event.pull_request.labels.*.name, 'ci-off')"),
-//    githubWorkflowPublishTargetBranches := List(
-//      RefPredicate.StartsWith(Ref.Tag("v"))
-//    )
-//  )
-//)
-
 addCommandAlias(
   "validate",
   ";scalafmtSbtCheck;scalafmtCheckAll;scalafixAll --check;test;IntegrationTest/test"
