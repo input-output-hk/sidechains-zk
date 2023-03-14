@@ -3,7 +3,7 @@ ThisBuild / version := "0.1.0-SNAPSHOT"
 ThisBuild / scalaVersion := "2.13.10"
 
 val `scala-2.13`        = "2.13.10"
-val sidechainsZkVersion = "0.0.3"
+val sidechainsZkVersion = "0.0.4"
 
 val rootDirectory = file(".")
 
