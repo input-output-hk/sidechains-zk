@@ -1,11 +1,17 @@
 [package]
 name = "jubjub-zk"
 version = "0.0.1"
-authors = ["Nikolaos Dymitriadis <nikolaos.dymitriadis@iohk.io>"]
+authors = [
+    "Nikolaos Dymitriadis <nikolaos.dymitriadis@iohk.io>",
+    "Lech Głowiak <lech.glowiak@iohk.io>"
+]
 edition = "2018"
 
 [dependencies]
 jni = "0.19"
+group = "0.13.0"
+eddsa = { path = "../../../../eddsa", version="0.1.0" }
+jubjub = "0.10.0"
 
 [lib]
 crate_type = ["cdylib"]
