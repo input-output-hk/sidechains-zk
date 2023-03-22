@@ -8,9 +8,9 @@ authors = [
 edition = "2018"
 
 [dependencies]
-jni = "0.19"
-group = "0.13.0"
 eddsa = { path = "../../../../eddsa", version="0.1.0" }
+group = "0.13.0"
+jni = "0.19"
 jubjub = "0.10.0"
 
 [lib]
