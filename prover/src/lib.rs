@@ -48,5 +48,7 @@
 //! * `t'> t`, for `t` global parameter defining the threshold (probably a constant
 //!   in the circuit)
 
+mod prover;
+
 mod c_api;
 pub mod proof;
