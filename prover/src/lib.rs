@@ -48,7 +48,19 @@
 //! * `t'> t`, for `t` global parameter defining the threshold (probably a constant
 //!   in the circuit)
 
+#![deny(missing_debug_implementations)]
+#![deny(missing_docs)]
+
+// todo: eventually remove this
+#![allow(dead_code)]
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+
+
 mod prover;
+mod main_gate;
+mod ecc;
 
 mod c_api;
 pub mod proof;
+pub mod utilities;

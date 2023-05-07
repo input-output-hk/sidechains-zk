@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 7e6fd1fadb5ccbf6d1f3dc0765f29068e60e7de149594c8004048ea91b12197c # shrinks to base = AffinePoint { u: 0x2d1a65a1d480a7f723336732d5bfe4dff6f9cc401312888fa85fd6b5c198c7f9, v: 0x373698defe9160a37959870e1dd2c186d4c2ce9f4da4f070df9ed31c505495e8 }
