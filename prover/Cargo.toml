@@ -7,8 +7,23 @@ edition = "2021"
 name = "atms_halo2"
 crate-type = ["lib", "cdylib", "staticlib"]
 
+[patch."https://github.com/iquerejeta/halo2curves.git"]
+halo2curves = { path = "../../../CryptoLibs/halo2-explorations/halo2curves" }
+
 [dependencies]
-jubjub = "0.10.0"
-poseidon = { git = "https://github.com/iquerejeta/Poseidon252"}
 bls12_381 = "0.8.0"
+ff = "0.13.0"
+jubjub = "0.10.0"
+halo2curves = { git = "https://github.com/iquerejeta/halo2curves" }
+halo2_proofs = { git = "https://github.com/iquerejeta/halo2" }
 paste = "1"
+poseidon = { git = "https://github.com/iquerejeta/Poseidon252"}
+rand_core = "0.6.4"
+arrayvec = "0.7.2"
+group = "0.13.0"
+uint = "0.9.5"
+
+[dev-dependencies]
+rand = "0.8.5"
+rand_chacha = "0.3.1"
+proptest = "1.1.0"
