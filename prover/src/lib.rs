@@ -49,7 +49,7 @@
 //!   in the circuit)
 
 #![deny(missing_debug_implementations)]
-#![deny(missing_docs)]
+// #![deny(missing_docs)] // todo: looking forward bringing this back
 
 // todo: eventually remove this
 #![allow(dead_code)]
@@ -57,10 +57,18 @@
 #![allow(unused_variables)]
 
 
+use halo2_proofs::circuit::AssignedCell;
+
 mod prover;
+mod instructions;
 mod main_gate;
 mod ecc;
 
 mod c_api;
 pub mod proof;
-pub mod utilities;
+pub mod util;
+
+/// AssignedValue
+pub type AssignedValue<F> = AssignedCell<F, F>;
+/// AssignedCondition
+pub type AssignedCondition<F> = AssignedCell<F, F>;

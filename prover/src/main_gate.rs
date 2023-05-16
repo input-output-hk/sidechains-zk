@@ -1,4 +1,4 @@
-//! The `main_gate` is a five width stardart like PLONK gate
+//! The `main_gate` is a five width standard like PLONK gate
 //! that constrains the equation below:
 //!
 //! q_a * a + q_b * b + q_c * c + q_d * d + q_e * e +
@@ -12,11 +12,15 @@
 //!
 //! TODO: once we progress with the circuit, check if we actually need this number of columns.
 
+use std::iter;
 use std::marker::PhantomData;
-use halo2_proofs::circuit::Chip;
-use halo2_proofs::plonk::{Advice, Column, ConstraintSystem, Expression, Fixed, Instance};
+use halo2_proofs::circuit::{Chip, Layouter, Value};
+use halo2_proofs::plonk::{Advice, Column, ConstraintSystem, Error, Expression, Fixed, Instance};
 use halo2_proofs::poly::Rotation;
 use halo2curves::ff::PrimeField;
+use crate::{AssignedCondition, AssignedValue};
+use crate::instructions::{CombinationOptionCommon, MainGateInstructions, Term};
+use crate::util::RegionCtx;
 
 const WIDTH: usize = 5;
 
@@ -29,6 +33,8 @@ pub trait ColumnTags<Column> {
     fn first() -> Column;
     /// Index that last term should in linear combination
     fn last_term_index() -> usize;
+    /// Get the `i % 5`th column
+    fn from_index(index: u8) -> Column;
 }
 
 /// Enumerates columns of the main gate
@@ -46,6 +52,19 @@ pub enum MainGateColumn {
     E = 4,
 }
 
+impl From<u8> for MainGateColumn {
+    fn from(value: u8) -> Self {
+        match value {
+            0 => Self::A,
+            1 => Self::B,
+            2 => Self::C,
+            3 => Self::D,
+            4 => Self::E,
+            _ => panic!("Invalid conversion. There is not enough columns"),
+        }
+    }
+}
+
 impl ColumnTags<MainGateColumn> for MainGateColumn {
     fn first() -> Self {
         MainGateColumn::A
@@ -57,6 +76,10 @@ impl ColumnTags<MainGateColumn> for MainGateColumn {
 
     fn last_term_index() -> usize {
         Self::first() as usize
+    }
+
+    fn from_index(index: u8) -> MainGateColumn {
+        MainGateColumn::from(index % 5)
     }
 }
 
@@ -114,6 +137,324 @@ impl<F: PrimeField> Chip<F> for MainGate<F> {
 
     fn loaded(&self) -> &Self::Loaded {
         &()
+    }
+}
+
+/// Additional combination customisations for this gate with two multiplication
+#[derive(Clone, Debug)]
+pub enum CombinationOption<F: PrimeField> {
+    /// Wrapper for common combination options
+    Common(CombinationOptionCommon<F>),
+    /// Activates both of the multiplication gate
+    OneLinerDoubleMul(F),
+    /// Activates both multiplication gate and combines the result to the next
+    /// row
+    CombineToNextDoubleMul(F),
+}
+
+impl<F: PrimeField> From<CombinationOptionCommon<F>> for CombinationOption<F> {
+    fn from(option: CombinationOptionCommon<F>) -> Self {
+        CombinationOption::Common(option)
+    }
+}
+
+impl<F: PrimeField> MainGateInstructions<F, WIDTH> for MainGate<F> {
+    type CombinationOption = CombinationOption<F>;
+    type MainGateColumn = MainGateColumn;
+
+    fn expose_public(
+        &self,
+        mut layouter: impl Layouter<F>,
+        value: AssignedValue<F>,
+        row: usize,
+    ) -> Result<(), Error> {
+        let config = self.config();
+        layouter.constrain_instance(value.cell(), config.instance, row)
+    }
+
+    fn assign_to_column(
+        &self,
+        ctx: &mut RegionCtx<'_, F>,
+        unassigned: Value<F>,
+        column: MainGateColumn,
+    ) -> Result<AssignedValue<F>, Error> {
+        let column = match column {
+            MainGateColumn::A => self.config.a,
+            MainGateColumn::B => self.config.b,
+            MainGateColumn::C => self.config.c,
+            MainGateColumn::D => self.config.d,
+            MainGateColumn::E => self.config.e,
+        };
+        let cell = ctx.assign_advice(|| "assign value", column, unassigned)?;
+        // proceed to the next row
+        self.no_operation(ctx)?;
+        Ok(cell)
+    }
+
+    fn sub_sub_with_constant(
+        &self,
+        ctx: &mut RegionCtx<'_, F>,
+        a: &AssignedValue<F>,
+        b_0: &AssignedValue<F>,
+        b_1: &AssignedValue<F>,
+        constant: F,
+    ) -> Result<AssignedValue<F>, Error> {
+        let c = a
+            .value()
+            .zip(b_0.value())
+            .zip(b_1.value())
+            .map(|((a, b_0), b_1)| *a - *b_0 - *b_1 + constant);
+
+        Ok(self
+            .apply(
+                ctx,
+                [
+                    Term::assigned_to_add(a),
+                    Term::assigned_to_sub(b_0),
+                    Term::assigned_to_sub(b_1),
+                    Term::unassigned_to_sub(c),
+                ],
+                constant,
+                CombinationOptionCommon::OneLinerAdd.into(),
+            )?
+            .swap_remove(3))
+    }
+
+    fn select(
+        &self,
+        ctx: &mut RegionCtx<'_, F>,
+        a: &AssignedValue<F>,
+        b: &AssignedValue<F>,
+        cond: &AssignedCondition<F>,
+    ) -> Result<AssignedValue<F>, Error> {
+        // We should satisfy the equation below with bit asserted condition flag
+        // c (a-b) + b - res = 0
+        // cond * a - cond * b + b - res = 0
+
+        // Witness layout:
+        // | A   | B   | C | D   | E  |
+        // | --- | --- | - | --- | ---|
+        // | c   | a   | c | b   | res|
+
+        let res = a
+            .value()
+            .zip(b.value())
+            .zip(cond.value())
+            .map(|((a, b), cond)| {
+                if *cond == F::ONE {
+                    *a
+                } else {
+                    assert_eq!(*cond, F::ZERO);
+                    *b
+                }
+            });
+
+        let mut assigned = self.apply(
+            ctx,
+            [
+                Term::assigned_to_mul(cond),
+                Term::assigned_to_mul(a),
+                Term::assigned_to_mul(cond),
+                Term::assigned_to_add(b),
+                Term::unassigned_to_sub(res),
+            ],
+            F::ZERO,
+            CombinationOption::OneLinerDoubleMul(-F::ONE),
+        )?;
+        ctx.constrain_equal(assigned[0].cell(), assigned[2].cell())?;
+        Ok(assigned.swap_remove(4))
+    }
+
+    fn select_or_assign(
+        &self,
+        ctx: &mut RegionCtx<'_, F>,
+        a: &AssignedValue<F>,
+        b: F,
+        cond: &AssignedCondition<F>,
+    ) -> Result<AssignedValue<F>, Error> {
+        // We should satisfy the equation below with bit asserted condition flag
+        // c (a-b_constant) + b_constant - res = 0
+
+        // Witness layout:
+        // | A   | B   | C | D   |
+        // | --- | --- | - | --- |
+        // | dif | a   | - | -   |
+        // | c   | dif | - | res |
+
+        let (dif, res) = a
+            .value()
+            .zip(cond.value())
+            .map(|(a, cond)| {
+                (
+                    *a - b,
+                    if *cond == F::ONE {
+                        *a
+                    } else {
+                        assert_eq!(*cond, F::ZERO);
+                        b
+                    },
+                )
+            })
+            .unzip();
+
+        // a - b - dif = 0
+        let dif = &self.apply(
+            ctx,
+            [Term::assigned_to_add(a), Term::unassigned_to_sub(dif)],
+            -b,
+            CombinationOptionCommon::OneLinerAdd.into(),
+        )?[1];
+
+        // cond * dif + b + a_or_b  = 0
+        let res = self
+            .apply(
+                ctx,
+                [
+                    Term::assigned_to_mul(dif),
+                    Term::assigned_to_mul(cond),
+                    Term::unassigned_to_sub(res),
+                ],
+                b,
+                CombinationOptionCommon::OneLinerMul.into(),
+            )?
+            .swap_remove(2);
+
+        Ok(res)
+    }
+    fn apply<'t>(
+        &self,
+        ctx: &mut RegionCtx<'_, F>,
+        terms: impl IntoIterator<Item = Term<'t, F>> + 't,
+        constant: F,
+        option: CombinationOption<F>,
+    ) -> Result<Vec<AssignedValue<F>>, Error> {
+        let terms = terms.into_iter().collect::<Vec<_>>();
+        debug_assert!(terms.len() <= WIDTH);
+
+        let assigned = [
+            self.config.a,
+            self.config.b,
+            self.config.c,
+            self.config.d,
+            self.config.e,
+        ]
+            .into_iter()
+            .zip([
+                self.config.sa,
+                self.config.sb,
+                self.config.sc,
+                self.config.sd,
+                self.config.se,
+            ])
+            .zip(terms.iter().chain(iter::repeat(&Term::Zero)))
+            .enumerate()
+            .map(|(idx, ((coeff, base), term))| {
+                let assigned = ctx.assign_advice(|| format!("coeff_{idx}"), coeff, term.coeff())?;
+                ctx.assign_fixed(|| format!("base_{idx}"), base, term.base())?;
+                Ok(assigned)
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
+
+        ctx.assign_fixed(|| "s_constant", self.config.s_constant, constant)?;
+
+        // Given specific option configure multiplication and rotation gates
+        match option {
+            CombinationOption::Common(option) => match option {
+                // q_a * a + q_b * b + q_c * c + q_d * d + q_e * e +
+                // a * b +
+                // q_e_next * e +
+                // q_constant = 0
+                CombinationOptionCommon::CombineToNextMul(next) => {
+                    ctx.assign_fixed(|| "s_mul_ab", self.config.s_mul_ab, F::ONE)?;
+                    ctx.assign_fixed(|| "s_mul_cd", self.config.s_mul_cd, F::ZERO)?;
+                    ctx.assign_fixed(|| "se_next", self.config.se_next, next)?;
+                }
+
+                // q_a * a + q_b * b + q_c * c + q_d * d + q_e * e +
+                // q_mul_ab * a * b +
+                // q_e_next * e +
+                // q_constant = 0
+                CombinationOptionCommon::CombineToNextScaleMul(next, n) => {
+                    ctx.assign_fixed(|| "s_mul_ab", self.config.s_mul_ab, n)?;
+                    ctx.assign_fixed(|| "s_mul_cd", self.config.s_mul_cd, F::ZERO)?;
+                    ctx.assign_fixed(|| "se_next", self.config.se_next, next)?;
+                }
+
+                // q_a * a + q_b * b + q_c * c + q_d * d + q_e * e +
+                // q_e_next * e_next +
+                // q_constant = 0
+                // todo: Include the result, so that the `assign_advice` is done automatically
+                CombinationOptionCommon::CombineToNextAdd(next) => {
+                    ctx.assign_fixed(|| "s_mul_ab", self.config.s_mul_ab, F::ZERO)?;
+                    ctx.assign_fixed(|| "s_mul_cd", self.config.s_mul_cd, F::ZERO)?;
+                    ctx.assign_fixed(|| "se_next", self.config.se_next, next)?;
+                }
+
+                // q_a * a + q_b * b + q_c * c + q_d * d + q_e * e +
+                // q_mul_ab * a * b +
+                // q_constant = 0
+                CombinationOptionCommon::OneLinerMul => {
+                    ctx.assign_fixed(|| "s_mul_ab", self.config.s_mul_ab, F::ONE)?;
+                    ctx.assign_fixed(|| "s_mul_cd", self.config.s_mul_cd, F::ZERO)?;
+                    ctx.assign_fixed(|| "se_next", self.config.se_next, F::ZERO)?;
+                }
+
+                // q_a * a + q_b * b + q_c * c + q_d * d + q_e * e +
+                // q_constant = 0
+                CombinationOptionCommon::OneLinerAdd => {
+                    ctx.assign_fixed(|| "se_next", self.config.se_next, F::ZERO)?;
+                    ctx.assign_fixed(|| "s_mul_ab", self.config.s_mul_ab, F::ZERO)?;
+                    ctx.assign_fixed(|| "s_mul_cd", self.config.s_mul_cd, F::ZERO)?;
+                }
+            },
+
+            // q_a * a + q_b * b + q_c * c + q_d * d + q_e * e +
+            // q_mul_ab * a * b +
+            // q_mul_cd * c * d +
+            // q_e_next * e +
+            // q_constant = 0
+            CombinationOption::CombineToNextDoubleMul(next) => {
+                ctx.assign_fixed(|| "s_mul_ab", self.config.s_mul_ab, F::ONE)?;
+                ctx.assign_fixed(|| "s_mul_cd", self.config.s_mul_cd, F::ONE)?;
+                ctx.assign_fixed(|| "se_next", self.config.se_next, next)?;
+            }
+
+            // q_a * a + q_b * b + q_c * c + q_d * d + q_e * e +
+            // q_mul_ab * a * b +
+            // q_mul_cd * c * d +
+            // q_constant = 0
+            CombinationOption::OneLinerDoubleMul(e) => {
+                ctx.assign_fixed(|| "s_mul_ab", self.config.s_mul_ab, F::ONE)?;
+                ctx.assign_fixed(|| "s_mul_cd", self.config.s_mul_cd, e)?;
+                ctx.assign_fixed(|| "se_next", self.config.se_next, F::ZERO)?;
+            }
+        };
+
+        // If given witness is already assigned apply copy constains
+        for (term, rhs) in terms.iter().zip(assigned.iter()) {
+            if let Term::Assigned(lhs, _) = term {
+                ctx.constrain_equal(lhs.cell(), rhs.cell())?;
+            }
+        }
+
+        ctx.next();
+
+        Ok(assigned)
+    }
+
+    /// Skip this row without any operation
+    fn no_operation(&self, ctx: &mut RegionCtx<'_, F>) -> Result<(), Error> {
+        ctx.assign_fixed(|| "s_mul_ab", self.config.s_mul_ab, F::ZERO)?;
+        ctx.assign_fixed(|| "s_mul_cd", self.config.s_mul_cd, F::ZERO)?;
+        ctx.assign_fixed(|| "sc", self.config.sc, F::ZERO)?;
+        ctx.assign_fixed(|| "sa", self.config.sa, F::ZERO)?;
+        ctx.assign_fixed(|| "sb", self.config.sb, F::ZERO)?;
+        ctx.assign_fixed(|| "sd", self.config.sd, F::ZERO)?;
+        ctx.assign_fixed(|| "se", self.config.se, F::ZERO)?;
+        ctx.assign_fixed(|| "se_next", self.config.se_next, F::ZERO)?;
+        ctx.assign_fixed(|| "s_constant", self.config.s_constant, F::ZERO)?;
+        ctx.next();
+        Ok(())
     }
 }
 
