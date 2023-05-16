@@ -1,4 +1,4 @@
-use super::EccPoint;
+use super::AssignedEccPoint;
 use ff::PrimeField;
 use halo2_proofs::{
     circuit::Region,
@@ -7,7 +7,9 @@ use halo2_proofs::{
 };
 use halo2curves::jubjub;
 use std::collections::HashSet;
+use halo2_proofs::circuit::Value;
 use halo2curves::bls12_381::Scalar;
+use crate::util::RegionCtx;
 
 // The twisted Edwards addition law is defined as follows:
 //
@@ -118,10 +120,10 @@ impl Config {
             let x_r = meta.query_advice(self.x_qr, Rotation::next());
             let y_r = meta.query_advice(self.y_qr, Rotation::next());
 
-            // α = inv0(1 + d x_p x_qr y_p y_qr)
-            let alpha = meta.query_advice(self.alpha, Rotation::cur());
-            // β = inv0(1 - d x_p x_qr y_p y_qr)
-            let beta = meta.query_advice(self.beta, Rotation::cur());
+            // // α = inv0(1 + d x_p x_qr y_p y_qr)
+            // let alpha = meta.query_advice(self.alpha, Rotation::cur());
+            // // β = inv0(1 - d x_p x_qr y_p y_qr)
+            // let beta = meta.query_advice(self.beta, Rotation::cur());
 
             // Useful constants
             let one = Expression::Constant(jubjub::Base::one());
@@ -144,7 +146,7 @@ impl Config {
             // x_r * (1 + d * x_p * x_q * y_p * y_q) - x_p * y_q + x_q * y_p = 0
             let poly1 = {
                 let one_plus = one.clone() + d_x_p_x_q_y_p_y_q.clone(); // (1 + d * x_p * x_q * y_p * y_q)
-                let nominator = x_p_times_y_q.clone() * x_q_times_y_p.clone(); // (x_p * y_q + x_q * y_p)
+                let nominator = x_p_times_y_q.clone() + x_q_times_y_p.clone(); // (x_p * y_q + x_q * y_p)
 
                 // q_add * (x_r * (1 + d * x_p * x_q * y_p * y_q) - x_p * y_q + x_q * y_p)
                 x_r.clone() * one_plus - nominator
@@ -153,7 +155,7 @@ impl Config {
             // y_r * (1 - d * x_p * x_q * y_p * y_q) - y_p * y_q + x_p * x_q = 0
             let poly2 = {
                 let one_minus = one.clone() - d_x_p_x_q_y_p_y_q.clone(); // (1 + d * x_p * x_q * y_p * y_q)
-                let nominator = y_p_times_y_q.clone() * x_p_times_x_q.clone(); // (y_p * y_q + x_p * x_q)
+                let nominator = y_p_times_y_q.clone() + x_p_times_x_q.clone(); // (y_p * y_q + x_p * x_q)
 
                 // q_add * (x_r * (1 + d * x_p * x_q * y_p * y_q) - x_p * y_q + x_q * y_p)
                 y_r.clone() * one_minus - nominator
@@ -162,8 +164,8 @@ impl Config {
             Constraints::with_selector(
                 q_add,
                 [
-                    ("x_r", poly1),
-                    ("y_r", poly2),
+                    ("x_r constraint", poly1),
+                    ("y_r constraint", poly2),
                 ],
             )
         });
@@ -171,25 +173,23 @@ impl Config {
 
     pub(super) fn assign_region(
         &self,
-        p: &EccPoint,
-        q: &EccPoint,
-        offset: usize,
-        region: &mut Region<'_, jubjub::Base>,
-    ) -> Result<EccPoint, Error> {
+        ctx: &mut RegionCtx<'_, jubjub::Base>,
+        p: &(Value<jubjub::Base>, Value<jubjub::Base>),
+        q: &(Value<jubjub::Base>, Value<jubjub::Base>),
+    ) -> Result<AssignedEccPoint, Error> {
         // Enable `q_add` selector
-        self.q_add.enable(region, offset)?;
+        ctx.enable(self.q_add)?;
 
-        // Handle exceptional cases
-        let (x_p, y_p) = (p.x.value(), p.y.value());
-        let (x_q, y_q) = (q.x.value(), q.y.value());
+        let (x_p, y_p) = (p.0, p.1);
+        let (x_q, y_q) = (q.0, q.1);
 
         // Copy point `p` into `x_p`, `y_p` columns
-        p.x.copy_advice(|| "x_p", region, self.x_p, offset)?;
-        p.y.copy_advice(|| "y_p", region, self.y_p, offset)?;
+        ctx.assign_advice(|| "x_p", self.x_p, x_p)?;
+        ctx.assign_advice(|| "y_p", self.y_p, y_p)?;
 
         // Copy point `q` into `x_qr`, `y_qr` columns
-        q.x.copy_advice(|| "x_q", region, self.x_qr, offset)?;
-        q.y.copy_advice(|| "y_q", region, self.y_qr, offset)?;
+        ctx.assign_advice(|| "x_q", self.x_qr, x_q)?;
+        ctx.assign_advice(|| "y_q", self.y_qr, y_q)?;
 
         // Compute the sum `P + Q = R`
         // x_r * (1 + d * x_p * x_q * y_p * y_q) = x_p * y_q + x_q * y_p
@@ -202,106 +202,39 @@ impl Config {
                 {
                     // λ = (d * x_p * x_q * y_p * y_q)
                     let lambda = Assigned::from(EDWARDS_D) * x_p.clone() * x_q.clone() * y_p.clone() * y_q.clone();
+                    // α = inv0(1 + d x_p x_qr y_p y_qr)
+                    let alpha = (Assigned::from(Scalar::one()) + lambda).invert();
+                    // β = inv0(1 - d x_p x_qr y_p y_qr)
+                    let beta = (Assigned::from(Scalar::one()) - lambda).invert();
                     // x_r = (x_p * y_q + x_q * y_p) * (1 + lambda)^{-1}
-                    let x_r = (x_p.clone() * y_q.clone() + x_q.clone() * y_p.clone()) * (Assigned::from(Scalar::one()) + lambda).invert();
+                    let x_r = alpha * (x_p.clone() * y_q.clone() + x_q.clone() * y_p.clone());
                     // y_r = (x_p * x_q + y_p * y_q) * (1 - lambda)^{-1}
-                    let y_r = (x_p.clone() * x_q.clone() + y_p.clone() * y_q.clone()) * (Assigned::from(Scalar::one()) - lambda).invert();
-                    (x_r, y_r)
+                    let y_r = beta * (x_p.clone() * x_q.clone() + y_p.clone() * y_q.clone());
+                    (alpha, beta, x_r, y_r)
                 }
             });
 
+        // Assign the cells for alpha and beta
+        let alpha = r.map(|r| r.0.evaluate());
+        let beta = r.map(|r| r.1.evaluate());
+
+        ctx.assign_advice(|| "alpha", self.alpha, alpha)?;
+        ctx.assign_advice(|| "beta", self.beta, beta)?;
+
         // Assign the sum to `x_qr`, `y_qr` columns in the next row
-        let x_r = r.map(|r| r.0);
-        let x_r_var = region.assign_advice(|| "x_r", self.x_qr, offset + 1, || x_r)?;
+        let x_r = r.map(|r| r.2.evaluate());
+        let y_r = r.map(|r| r.3.evaluate());
 
-        let y_r = r.map(|r| r.1);
-        let y_r_var = region.assign_advice(|| "y_r", self.y_qr, offset + 1, || y_r)?;
+        // Assign the result in the next cell.
+        ctx.next();
+        let x_r_cell = ctx.assign_advice(|| "x_r", self.x_qr, x_r)?;
+        let y_r_cell = ctx.assign_advice(|| "y_r", self.y_qr, y_r)?;
 
-        let result = EccPoint {
-            x: x_r_var,
-            y: y_r_var,
+        let result = AssignedEccPoint {
+            x: x_r_cell,
+            y: y_r_cell,
         };
 
         Ok(result)
-    }
-}
-
-#[cfg(test)]
-pub mod tests {
-    use group::{Curve};
-    use halo2_proofs::{
-        circuit::{Layouter, Value},
-        plonk::Error,
-    };
-    use halo2curves::{jubjub, CurveExt};
-
-    use crate::ecc::{chip::EccPoint, EccInstructions, NonIdentityPoint};
-
-    #[allow(clippy::too_many_arguments)]
-    pub fn test_add<
-        EccChip: EccInstructions<jubjub::AffinePoint, Point = EccPoint> + Clone + Eq + std::fmt::Debug,
-    >(
-        chip: EccChip,
-        mut layouter: impl Layouter<jubjub::Base>,
-        p_val: jubjub::AffinePoint,
-        p: &NonIdentityPoint<jubjub::AffinePoint, EccChip>,
-        q_val: jubjub::AffinePoint,
-        q: &NonIdentityPoint<jubjub::AffinePoint, EccChip>,
-        p_neg: &NonIdentityPoint<jubjub::AffinePoint, EccChip>,
-    ) -> Result<(), Error> {
-        // Make sure P and Q are not the same point.
-        assert_ne!(p_val, q_val);
-
-        // Check complete addition P + (-P)
-        let zero = {
-            let result = p.add(layouter.namespace(|| "P + (-P)"), p_neg)?;
-            result
-                .inner()
-                .is_identity()
-                .assert_if_known(|is_identity| *is_identity);
-            result
-        };
-
-        // Check complete addition 𝒪 + 𝒪
-        {
-            let result = zero.add(layouter.namespace(|| "𝒪 + 𝒪"), &zero)?;
-            result.constrain_equal(layouter.namespace(|| "𝒪 + 𝒪 = 𝒪"), &zero)?;
-        }
-
-        // Check P + Q
-        {
-            let result = p.add(layouter.namespace(|| "P + Q"), q)?;
-            let witnessed_result = NonIdentityPoint::new(
-                chip.clone(),
-                layouter.namespace(|| "witnessed P + Q"),
-                Value::known((p_val + q_val).to_affine()),
-            )?;
-            result.constrain_equal(layouter.namespace(|| "constrain P + Q"), &witnessed_result)?;
-        }
-
-        // P + P
-        {
-            let result = p.add(layouter.namespace(|| "P + P"), p)?;
-            let witnessed_result = NonIdentityPoint::new(
-                chip.clone(),
-                layouter.namespace(|| "witnessed P + P"),
-                Value::known((p_val + p_val).to_affine()),
-            )?;
-            result.constrain_equal(layouter.namespace(|| "constrain P + P"), &witnessed_result)?;
-        }
-
-        // P + 𝒪
-        {
-            let result = p.add(layouter.namespace(|| "P + 𝒪"), &zero)?;
-            result.constrain_equal(layouter.namespace(|| "P + 𝒪 = P"), p)?;
-        }
-
-        // 𝒪 + P
-        {
-            let result = zero.add(layouter.namespace(|| "𝒪 + P"), p)?;
-            result.constrain_equal(layouter.namespace(|| "𝒪 + P = P"), p)?;
-        }
-
-        Ok(())
     }
 }
