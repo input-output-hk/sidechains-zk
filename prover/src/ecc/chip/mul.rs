@@ -1,510 +1,148 @@
-use super::{add, EccPoint, NonIdentityEccPoint, ScalarVar};
-use crate::{
-    utilities::{bool_check, lookup_range_check::LookupRangeCheckConfig, ternary},
-};
-use std::{
-    convert::TryInto,
-    ops::{Deref, Range},
-};
+// Constant-time, variable-base scalar multiplication. To comput s * P we use
+// the windowed method.
+//
+// Construct a lookup table of [P,2P,3P,4P,5P,6P,7P,8P]
+//
+// Compute the 2^3 radix representation of s:
+//
+//    s = s_0 + s_1 * 8^1 + ... + s_31 * 8^31,
+//
+// with `0 ≤ s_i < 8` for `0 ≤ i ≤ 31`.
+//
+// This decomposition requires s < 2^256.
+//
+// Compute s * P as
+//
+//    s * P = P * (s_0 +   s_1 * 8^1 +   s_2 * 8^2 + ... +   s_31 * 8^31)
+//    s * P = P * s_0 + P * s_1 * 8^1 + P * s_2 * 8^2 + ... + P * s_31 * 8^31
+//    s * P = P * s_0 + 8 * (P * s_1 + 8 * (P * s_2 + 8 * ( ... + 8 * P * s_31)...))
+//
+// We sum right-to-left.
+//
+// We follow the technique of logic gate configuration for the summed decomposition. The
+// lookup is as follows:
+// q_mult * [
+//    (1 - q_last) * lookup[limb - base * limb_next, x_p, y_p] +
+//    q_last * lookup[limb, x_p, y_p]
+// ]
+//
+// Layout
+// +---------------------------------------------+
+// | q_mult | q_last |  limb |   x_p   |   y_p   |
+// +---------------------------------------------+
+// |    1   |    0   |   s   | x_p[31] | y_p[31] |
+// |    1   |    0   | s[31] | x_p[30] | y_p[30] |
+// |    1   |    0   | s[30] | x_p[29] | y_p[29] |
+// |   ...  |   ...  |  ...  |   ...   |   ...   |
+// |    1   |    0   | s[1]  | x_p[0]  | y_p[0]  |
+// |    1   |    1   | s[0]  |    0    |   0     |
+// |    0   |    0   |   0   |    0    |   0     |
+// +---------------------------------------------+
+//
+// Once we have the associated multiples, we compute our sum as follows:
+//
+// +---------------------------------------------------+
+// |   x_acc   |   y_acc   |   8_x_acc   |   8_y_acc   |
+// +---------------------------------------------------+
+// | x_acc[31] | y_acc[31] | 8_x_acc[31] | 8_y_acc[31] |
+// | x_acc[30] | y_acc[30] | 8_x_acc[30] | 8_y_acc[30] |
+// |    ...    |    ...    |     ...     |     ...     |
+// | x_acc[0]  | y_acc[0]  | 8_x_acc[0]  | 8_y_acc[0]  |
+// | x_acc     | y_acc     | 8_x_acc     | 8_y_acc     |
+// +---------------------------------------------------+
+//
+// Let
+// * sum(x_p, y_p, x_q, y_q, x_r, y_r) constrain that (x_p, y_p) + (x_q, y_q) = (x_r, y_r)
+// * double_3(x_p, y_p, x_r, y_r) constrain that [2^3](x_p, y_p) = (x_r, y_r)
+//
+// We make the following constrains:
+// * x_acc[31] = x_p[31];
+//
+// * y_acc[31] = y_p[31];
+//
+// * 8_x_acc[i] \
+//                } --> double_3(x_acc[i], y_acc[i], 8_x_acc[i], 8_y_acc[i])
+// * 8_x_acc[i] /
+//
+// * x_acc[j] \
+//              } --> sum(x_p[j], y_p[j], 8_x_acc[j + 1], 8_y_acc[j + 1], x_acc[j], y_acc[j])
+// * y_acc[j] /
+//
+// for 0 ≤ i ≤ 31 and 0 ≤ j ≤ 30.
+//
+//
+//
 
-use halo2_proofs::{
-    arithmetic::Field,
-    circuit::{AssignedCell, Layouter, Region, Value},
-    plonk::{Advice, Assigned, Column, ConstraintSystem, Constraints, Error, Selector},
-    poly::Rotation,
-};
-use halo2curves::group::ff::PrimeField;
-use halo2curves::jubjub;
-use uint::construct_uint;
 
-mod complete;
-mod overflow;
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MulConfig {
+    // Table columns
+    t_limb: TableColumn,
+    t_x_out: TableColumn,
+    t_y_out: TableColumn,
 
-/// Number of bits for which complete addition needs to be used in variable-base
-/// scalar multiplication
-const NUM_COMPLETE_BITS: usize = 3;
+    q_mul: Selector,
 
-const COMPLETE_RANGE: Range<usize> = 0..NUM_COMPLETE_BITS;
-
-// todo: Copying constant from Sensimilla spec, but we might be able to use something smaller
-const K: usize = 10;
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub struct Config {
-    // Selector used to check switching logic on LSB
-    q_mul_lsb: Selector,
-    // Configuration used in addition
-    add_config: add::Config,
-    // Configuration used for complete addition part of double-and-add algorithm
-    complete_config: complete::Config,
-    // Configuration used to check for overflow
-    overflow_config: overflow::Config,
+    // x-coordinate of P in a * P = R
+    pub x_p: Column<Advice>,
+    // y-coordinate of P in a * P = R
+    pub y_p: Column<Advice>,
+    // scalar a in a * P = R
+    pub a: Column<Advice>,
+    // x-coordinate of R in a * P = R
+    pub x_r: Column<Advice>,
+    // y-coordinate of R in a * P = R
+    pub y_r: Column<Advice>,
 }
 
-impl Config {
-    pub(super) fn configure(
+impl MulConfig {
+    pub(crate) fn configure(
         meta: &mut ConstraintSystem<jubjub::Base>,
-        add_config: add::Config,
-        lookup_config: LookupRangeCheckConfig<jubjub::Base, { K }>,
-        advices: [Column<Advice>; 10],
+        x_p: Column<Advice>,
+        y_p: Column<Advice>,
+        a: Column<Advice>,
+        x_r: Column<Advice>,
+        y_r: Column<Advice>,
     ) -> Self {
-        let complete_config = complete::Config::configure(meta, advices[9], add_config);
-        let overflow_config =
-            overflow::Config::configure(meta, lookup_config, advices[6..9].try_into().unwrap());
+        let t_limb = meta.lookup_table_column();
+        let t_x_out = meta.lookup_table_column();
+        let t_y_out = meta.lookup_table_column();
+
+        meta.enable_equality(x_p);
+        meta.enable_equality(y_p);
+        meta.enable_equality(x_r);
+        meta.enable_equality(y_r);
 
         let config = Self {
-            q_mul_lsb: meta.selector(),
-            add_config,
-            complete_config,
-            overflow_config,
+            t_limb,
+            t_x_out,
+            t_y_out,
+            q_mul: meta.selector(),
+            x_p,
+            y_p,
+            a,
+            x_r,
+            y_r
         };
 
         config.create_gate(meta);
 
-        // For both hi_config and lo_config:
-        // z and lambda1 are assigned on the same row as the add_config output.
-        // Therefore, z and lambda1 must not overlap with add_config.x_qr, add_config.y_qr.
-        let add_config_outputs = config.add_config.output_columns();
-
         config
     }
 
-    fn create_gate(&self, meta: &mut ConstraintSystem<jubjub::Base>) {
-        // If `lsb` is 0, (x, y) = (x_p, -y_p). If `lsb` is 1, (x, y) = (0,0).
-        // https://p.z.cash/halo2-0.1:ecc-var-mul-lsb-gate?partial
-        meta.create_gate("LSB check", |meta| {
-            let q_mul_lsb = meta.query_selector(self.q_mul_lsb);
-
-            let z_1 = meta.query_advice(self.complete_config.z_complete, Rotation::cur());
-            let z_0 = meta.query_advice(self.complete_config.z_complete, Rotation::next());
-            let x_p = meta.query_advice(self.add_config.x_p, Rotation::cur());
-            let y_p = meta.query_advice(self.add_config.y_p, Rotation::cur());
-            let base_x = meta.query_advice(self.add_config.x_p, Rotation::next());
-            let base_y = meta.query_advice(self.add_config.y_p, Rotation::next());
-
-            //    z_0 = 2 * z_1 + k_0
-            // => k_0 = z_0 - 2 * z_1
-            let lsb = z_0 - z_1 * jubjub::Base::from(2);
-
-            let bool_check = bool_check(lsb.clone());
-
-            // `lsb` = 0 => (x_p, y_p) = (x, -y)
-            // `lsb` = 1 => (x_p, y_p) = (0,0)
-            let lsb_x = ternary(lsb.clone(), x_p.clone(), x_p - base_x);
-            let lsb_y = ternary(lsb, y_p.clone(), y_p + base_y);
-
-            Constraints::with_selector(
-                q_mul_lsb,
-                [
-                    ("bool_check", bool_check),
-                    ("lsb_x", lsb_x),
-                    ("lsb_y", lsb_y),
-                ],
-            )
-        });
+    pub(crate) fn advice_columns(&self) -> HashSet<Column<Advice>> {
+        [
+            self.x_p,
+            self.y_p,
+            self.a,
+        ]
+            .into_iter()
+            .collect()
     }
 
-    pub(super) fn assign(
-        &self,
-        mut layouter: impl Layouter<jubjub::Base>,
-        alpha: AssignedCell<jubjub::Base, jubjub::Base>,
-        base: &NonIdentityEccPoint,
-    ) -> Result<(EccPoint, ScalarVar), Error> {
-        let (result, zs): (EccPoint, Vec<Z<jubjub::Base>>) = layouter.assign_region(
-            || "variable-base scalar mul",
-            |mut region| {
-                let offset = 0;
-
-                // Case `base` into an `EccPoint` for later use.
-                let base_point: EccPoint = base.clone().into();
-
-                // Decompose `k = alpha + t_q` bitwise (big-endian bit order).
-                let bits = decompose_for_scalar_mul(alpha.value());
-
-                let lsb = bits[jubjub::Scalar::NUM_BITS as usize - 1];
-
-                // Initialize the accumulator `acc = [2]base` using complete addition.
-                let acc =
-                    self.add_config
-                        .assign_region(&base_point, &base_point, offset, &mut region)?;
-
-                // Increase the offset by 1 after complete addition.
-                let offset = offset + 1;
-
-                // Initialize the running sum for scalar decomposition to zero.
-                //
-                // `incomplete::Config::double_and_add` will copy this cell directly into
-                // itself. This is fine because we are just assigning the same value to
-                // the same cell twice, and then applying an equality constraint between
-                // the cell and itself (which the permutation argument treats as a no-op).
-                let z_init = Z(region.assign_advice_from_constant(
-                    || "z_init = 0",
-                    self.hi_config.z,
-                    offset,
-                    jubjub::Base::zero(),
-                )?);
-
-                // Double-and-add (incomplete addition) for the `hi` half of the scalar decomposition
-                let (x_a, y_a, zs_incomplete_hi) = self.hi_config.double_and_add(
-                    &mut region,
-                    offset,
-                    base,
-                    bits_incomplete_hi,
-                    (X(acc.x), Y(acc.y), z_init.clone()),
-                )?;
-
-                // Double-and-add (incomplete addition) for the `lo` half of the scalar decomposition
-                let z = zs_incomplete_hi.last().expect("should not be empty");
-                let (x_a, y_a, zs_incomplete_lo) = self.lo_config.double_and_add(
-                    &mut region,
-                    offset,
-                    base,
-                    bits_incomplete_lo,
-                    (x_a, y_a, z.clone()),
-                )?;
-
-                // Complete addition
-                let (acc, zs_complete) = {
-                    let z = zs_incomplete_lo.last().expect("should not be empty");
-                    // Bits used in complete addition. k_{3} to k_{1} inclusive
-                    // The LSB k_{0} is handled separately.
-                    let bits_complete = &bits[COMPLETE_RANGE];
-                    self.complete_config.assign_region(
-                        &mut region,
-                        offset,
-                        bits_complete,
-                        &base_point,
-                        x_a,
-                        y_a,
-                        z.clone(),
-                    )?
-                };
-
-                // Each iteration of the complete addition uses two rows.
-                let offset = offset + COMPLETE_RANGE.len() * 2;
-
-                // Process the least significant bit
-                let z_1 = zs_complete.last().unwrap().clone();
-                let (result, z_0) = self.process_lsb(&mut region, offset, base, acc, z_1, lsb)?;
-
-                #[cfg(test)]
-                // Check that the correct multiple is obtained.
-                {
-                    use group::Curve;
-
-                    let base = base.point();
-                    let alpha = alpha
-                        .value()
-                        .map(|alpha| jubjub::Scalar::from_repr(alpha.to_repr()).unwrap());
-                    let real_mul = base.zip(alpha).map(|(base, alpha)| base * alpha);
-                    let result = result.point();
-
-                    real_mul
-                        .zip(result)
-                        .assert_if_known(|(real_mul, result)| &real_mul.to_affine() == result);
-                }
-
-                let zs = {
-                    let mut zs = std::iter::empty()
-                        .chain(Some(z_init))
-                        .chain(zs_incomplete_hi.into_iter())
-                        .chain(zs_incomplete_lo.into_iter())
-                        .chain(zs_complete.into_iter())
-                        .chain(Some(z_0))
-                        .collect::<Vec<_>>();
-                    assert_eq!(zs.len(), jubjub::Scalar::NUM_BITS as usize + 1);
-
-                    // This reverses zs to give us [z_0, z_1, ..., z_{254}, z_{255}].
-                    zs.reverse();
-                    zs
-                };
-
-                Ok((result, zs))
-            },
-        )?;
-
-        self.overflow_config.overflow_check(
-            layouter.namespace(|| "overflow check"),
-            alpha.clone(),
-            &zs,
-        )?;
-
-        Ok((result, ScalarVar::BaseFieldElem(alpha)))
+    pub(crate) fn output_columns(&self) -> HashSet<Column<Advice>> {
+        [self.x_r, self.y_r].into_iter().collect()
     }
 
-    /// Processes the final scalar bit `k_0`.
-    ///
-    /// Assumptions for this sub-region:
-    /// - `acc_x` and `acc_y` are assigned in row `offset` by the previous complete
-    ///   addition. They will be copied into themselves.
-    /// - `z_1 is assigned in row `offset` by the mul::complete region assignment. We only
-    ///   use its value here.
-    ///
-    /// `x_p` and `y_p` are assigned here, and then copied into themselves by the complete
-    /// addition subregion.
-    ///
-    /// ```text
-    /// | x_p  | y_p  | acc_x | acc_y | complete addition  | z_1 | q_mul_lsb = 1
-    /// |base_x|base_y| res_x | res_y |   |   |    |   |   | z_0 |
-    /// ```
-    ///
-    /// [Specification](https://p.z.cash/halo2-0.1:ecc-var-mul-lsb-gate?partial).
-    fn process_lsb(
-        &self,
-        region: &mut Region<'_, jubjub::Base>,
-        offset: usize,
-        base: &NonIdentityEccPoint,
-        acc: EccPoint,
-        z_1: Z<jubjub::Base>,
-        lsb: Value<bool>,
-    ) -> Result<(EccPoint, Z<jubjub::Base>), Error> {
-        // Enforce switching logic on LSB using a custom gate
-        self.q_mul_lsb.enable(region, offset)?;
 
-        // z_1 has been assigned at (z_complete, offset).
-        // Assign z_0 = 2⋅z_1 + k_0
-        let z_0 = {
-            let z_0_val = z_1.value().zip(lsb).map(|(z_1, lsb)| {
-                let lsb = jubjub::Base::from(lsb as u64);
-                z_1 * jubjub::Base::from(2) + lsb
-            });
-            let z_0_cell = region.assign_advice(
-                || "z_0",
-                self.complete_config.z_complete,
-                offset + 1,
-                || z_0_val,
-            )?;
-
-            Z(z_0_cell)
-        };
-
-        // Copy in `base_x`, `base_y` to use in the LSB gate
-        base.x()
-            .copy_advice(|| "copy base_x", region, self.add_config.x_p, offset + 1)?;
-        base.y()
-            .copy_advice(|| "copy base_y", region, self.add_config.y_p, offset + 1)?;
-
-        // If `lsb` is 0, return `Acc + (-P)`. If `lsb` is 1, simply return `Acc + 0`.
-        let x = lsb.and_then(|lsb| {
-            if !lsb {
-                base.x.value().cloned()
-            } else {
-                Value::known(Assigned::Zero)
-            }
-        });
-
-        let y = lsb.and_then(|lsb| {
-            if !lsb {
-                -base.y.value()
-            } else {
-                Value::known(Assigned::Zero)
-            }
-        });
-
-        let x_cell = region.assign_advice(|| "x", self.add_config.x_p, offset, || x)?;
-        let y_cell = region.assign_advice(|| "y", self.add_config.y_p, offset, || y)?;
-
-        let p = EccPoint {
-            x: x_cell,
-            y: y_cell,
-        };
-
-        // Return the result of the final complete addition as `[scalar]B`
-        let result = self.add_config.assign_region(&p, &acc, offset, region)?;
-
-        Ok((result, z_0))
-    }
-}
-
-#[derive(Clone, Debug)]
-// `x`-coordinate of the accumulator.
-struct X<F: Field>(AssignedCell<Assigned<F>, F>);
-impl<F: Field> Deref for X<F> {
-    type Target = AssignedCell<Assigned<F>, F>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-#[derive(Clone, Debug)]
-// `y`-coordinate of the accumulator.
-struct Y<F: Field>(AssignedCell<Assigned<F>, F>);
-impl<F: Field> Deref for Y<F> {
-    type Target = AssignedCell<Assigned<F>, F>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-#[derive(Clone, Debug)]
-// Cumulative sum `z` used to decompose the scalar.
-struct Z<F: Field>(AssignedCell<F, F>);
-impl<F: Field> Deref for Z<F> {
-    type Target = AssignedCell<F, F>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-// https://p.z.cash/halo2-0.1:ecc-var-mul-witness-scalar?partial
-#[allow(clippy::assign_op_pattern)]
-#[allow(clippy::ptr_offset_with_cast)]
-fn decompose_for_scalar_mul(scalar: Value<&jubjub::Base>) -> Vec<Value<bool>> {
-    construct_uint! {
-        struct U256(4);
-    }
-
-    let bitstring = scalar.map(|scalar| {
-        let scalar = U256::from_little_endian(&scalar.to_repr());
-
-        // Little-endian bit representation of `k`.
-        let bitstring = {
-            let mut le_bytes = [0u8; 32];
-            scalar.to_little_endian(&mut le_bytes);
-            le_bytes
-                .into_iter()
-                .flat_map(|byte| (0..8).map(move |shift| (byte >> shift) % 2 == 1))
-        };
-
-        // Take the first 255 bits.
-        bitstring
-            .take(jubjub::Scalar::NUM_BITS as usize)
-            .collect::<Vec<_>>()
-    });
-
-    // Transpose.
-    let mut bitstring = bitstring.transpose_vec(jubjub::Scalar::NUM_BITS as usize);
-    // Reverse to get the big-endian bit representation.
-    bitstring.reverse();
-    bitstring
-}
-
-#[cfg(test)]
-pub mod tests {
-    use group::{
-        ff::{Field, PrimeField},
-        Curve,
-    };
-    use halo2_proofs::{
-        circuit::{Chip, Layouter, Value},
-        plonk::Error,
-    };
-    use halo2curves::pasta::pallas;
-    use rand::rngs::OsRng;
-
-    use crate::{
-        ecc::{
-            chip::{EccChip, EccPoint},
-            tests::TestFixedBases,
-            EccInstructions, NonIdentityPoint, Point, ScalarVar,
-        },
-        utilities::UtilitiesInstructions,
-    };
-
-    pub(crate) fn test_mul(
-        chip: EccChip<TestFixedBases>,
-        mut layouter: impl Layouter<jubjub::Base>,
-        p: &NonIdentityPoint<jubjub::AffinePoint, EccChip<TestFixedBases>>,
-        p_val: jubjub::AffinePoint,
-    ) -> Result<(), Error> {
-        let column = chip.config().advices[0];
-
-        fn constrain_equal_non_id<
-            EccChip: EccInstructions<jubjub::AffinePoint, Point = EccPoint> + Clone + Eq + std::fmt::Debug,
-        >(
-            chip: EccChip,
-            mut layouter: impl Layouter<jubjub::Base>,
-            base_val: jubjub::AffinePoint,
-            scalar_val: jubjub::Base,
-            result: Point<jubjub::AffinePoint, EccChip>,
-        ) -> Result<(), Error> {
-            // Move scalar from base field into scalar field (which always fits
-            // for Pallas).
-            let scalar = jubjub::Scalar::from_repr(scalar_val.to_repr()).unwrap();
-            let expected = NonIdentityPoint::new(
-                chip,
-                layouter.namespace(|| "expected point"),
-                Value::known((base_val * scalar).to_affine()),
-            )?;
-            result.constrain_equal(layouter.namespace(|| "constrain result"), &expected)
-        }
-
-        // [a]B
-        {
-            let scalar_val = jubjub::Base::random(OsRng);
-            let (result, _) = {
-                let scalar = chip.load_private(
-                    layouter.namespace(|| "random scalar"),
-                    column,
-                    Value::known(scalar_val),
-                )?;
-                let scalar = ScalarVar::from_base(
-                    chip.clone(),
-                    layouter.namespace(|| "ScalarVar from_base"),
-                    &scalar,
-                )?;
-                p.mul(layouter.namespace(|| "random [a]B"), scalar)?
-            };
-            constrain_equal_non_id(
-                chip.clone(),
-                layouter.namespace(|| "random [a]B"),
-                p_val,
-                scalar_val,
-                result,
-            )?;
-        }
-
-        // [0]B should return (0,0) since variable-base scalar multiplication
-        // uses complete addition for the final bits of the scalar.
-        {
-            let scalar_val = jubjub::Base::zero();
-            let (result, _) = {
-                let scalar = chip.load_private(
-                    layouter.namespace(|| "zero"),
-                    column,
-                    Value::known(scalar_val),
-                )?;
-                let scalar = ScalarVar::from_base(
-                    chip.clone(),
-                    layouter.namespace(|| "ScalarVar from_base"),
-                    &scalar,
-                )?;
-                p.mul(layouter.namespace(|| "[0]B"), scalar)?
-            };
-            result
-                .inner()
-                .is_identity()
-                .assert_if_known(|is_identity| *is_identity);
-        }
-
-        // [-1]B (the largest possible base field element)
-        {
-            let scalar_val = -jubjub::Base::one();
-            let (result, _) = {
-                let scalar = chip.load_private(
-                    layouter.namespace(|| "-1"),
-                    column,
-                    Value::known(scalar_val),
-                )?;
-                let scalar = ScalarVar::from_base(
-                    chip.clone(),
-                    layouter.namespace(|| "ScalarVar from_base"),
-                    &scalar,
-                )?;
-                p.mul(layouter.namespace(|| "[-1]B"), scalar)?
-            };
-            constrain_equal_non_id(
-                chip,
-                layouter.namespace(|| "[-1]B"),
-                p_val,
-                scalar_val,
-                result,
-            )?;
-        }
-
-        Ok(())
-    }
 }

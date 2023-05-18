@@ -47,7 +47,7 @@ pub(crate) const EDWARDS_D: jubjub::Fq = jubjub::Fq::from_raw([
 ]);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Config {
+pub struct AddConfig {
     q_add: Selector,
     // x-coordinate of P in P + Q = R
     pub x_p: Column<Advice>,
@@ -63,8 +63,8 @@ pub struct Config {
     beta: Column<Advice>
 }
 
-impl Config {
-    pub(super) fn configure(
+impl AddConfig {
+    pub(crate) fn configure(
         meta: &mut ConstraintSystem<jubjub::Base>,
         x_p: Column<Advice>,
         y_p: Column<Advice>,
@@ -174,30 +174,37 @@ impl Config {
     pub(super) fn assign_region(
         &self,
         ctx: &mut RegionCtx<'_, jubjub::Base>,
-        p: &(Value<jubjub::Base>, Value<jubjub::Base>),
-        q: &(Value<jubjub::Base>, Value<jubjub::Base>),
+        p: &AssignedEccPoint,
+        q: &AssignedEccPoint,
     ) -> Result<AssignedEccPoint, Error> {
         // Enable `q_add` selector
         ctx.enable(self.q_add)?;
 
-        let (x_p, y_p) = (p.0, p.1);
-        let (x_q, y_q) = (q.0, q.1);
+        let (x_p, y_p) = (p.x(), p.y());
+        let (x_q, y_q) = (q.x(), q.y());
 
         // Copy point `p` into `x_p`, `y_p` columns
-        ctx.assign_advice(|| "x_p", self.x_p, x_p)?;
-        ctx.assign_advice(|| "y_p", self.y_p, y_p)?;
+        let assigned_cell =
+            ctx.assign_advice(|| "x_p", self.x_p, x_p.value().map(|v|*v))?;
+        ctx.constrain_equal(assigned_cell.cell(), p.x().cell())?;
+        let assigned_cell =
+            ctx.assign_advice(|| "y_p", self.y_p, y_p.value().map(|v|*v))?;
+        ctx.constrain_equal(assigned_cell.cell(), p.y().cell())?;
 
         // Copy point `q` into `x_qr`, `y_qr` columns
-        ctx.assign_advice(|| "x_q", self.x_qr, x_q)?;
-        ctx.assign_advice(|| "y_q", self.y_qr, y_q)?;
+        let assigned_cell =
+            ctx.assign_advice(|| "x_q", self.x_qr, x_q.value().map(|v|*v))?;
+        ctx.constrain_equal(assigned_cell.cell(), q.x().cell())?;
+        let assigned_cell =
+            ctx.assign_advice(|| "y_q", self.y_qr, y_q.value().map(|v|*v))?;
+        ctx.constrain_equal(assigned_cell.cell(), q.y().cell())?;
 
-        // Compute the sum `P + Q = R`
         // x_r * (1 + d * x_p * x_q * y_p * y_q) = x_p * y_q + x_q * y_p
         // y_r * (1 - d * x_p * x_q * y_p * y_q) = y_p * y_q + x_p * x_q
-        let r = x_p
-            .zip(y_p)
-            .zip(x_q)
-            .zip(y_q)
+        let r = x_p.value()
+            .zip(y_p.value())
+            .zip(x_q.value())
+            .zip(y_q.value())
             .map(|(((x_p, y_p), x_q), y_q)| {
                 {
                     // λ = (d * x_p * x_q * y_p * y_q)
@@ -229,6 +236,7 @@ impl Config {
         ctx.next();
         let x_r_cell = ctx.assign_advice(|| "x_r", self.x_qr, x_r)?;
         let y_r_cell = ctx.assign_advice(|| "y_r", self.y_qr, y_r)?;
+        ctx.next(); // todo: was complaining of overwriting cells, but is it required?
 
         let result = AssignedEccPoint {
             x: x_r_cell,
@@ -236,5 +244,139 @@ impl Config {
         };
 
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use group::{Curve, Group};
+    use halo2_proofs::circuit::{Layouter, SimpleFloorPlanner, Value};
+    use halo2_proofs::dev::MockProver;
+    use halo2_proofs::plonk::{Circuit, ConstraintSystem, Error};
+    use halo2curves::CurveAffine;
+    use halo2curves::jubjub::{AffinePoint, Base, ExtendedPoint};
+    use rand_chacha::ChaCha8Rng;
+    use rand_core::SeedableRng;
+    use crate::ecc::chip::{EccChip, EccConfig, EccInstructions};
+    use crate::util::RegionCtx;
+
+    #[derive(Clone)]
+    struct TestCircuitConfig {
+        ecc_config: EccConfig,
+    }
+
+    #[derive(Clone, Debug, Default)]
+    struct TestCircuit {
+        point_a: AffinePoint,
+        point_b: AffinePoint,
+    }
+
+    impl Circuit<Base> for TestCircuit {
+        type Config = TestCircuitConfig;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            Self::default()
+        }
+
+        fn configure(meta: &mut ConstraintSystem<Base>) -> Self::Config {
+            let ecc_config = EccChip::configure(meta);
+            // todo: do we need to enable equality?
+
+            Self::Config {
+                ecc_config,
+            }
+        }
+
+        fn synthesize(
+            &self,
+            config: Self::Config,
+            mut layouter: impl Layouter<Base>,
+        ) -> Result<(), Error> {
+            let ecc_chip = EccChip::new(config.ecc_config.clone());
+
+            let assigned_val = layouter.assign_region(
+                || "Ecc addition test",
+                |region| {
+                    let offset = 0;
+                    let mut ctx = RegionCtx::new(region, offset);
+                    let assigned_a = ecc_chip.witness_point(&mut ctx, &Value::known(self.point_a))?;
+                    let assigned_b = ecc_chip.witness_point(&mut ctx, &Value::known(self.point_b))?;
+
+                    ecc_chip.add(&mut ctx, &assigned_a, &assigned_b)
+                },
+            )?;
+
+
+            layouter.constrain_instance(assigned_val.x.cell(), config.ecc_config.maingate_config.instance.clone(), 0)?;
+            layouter.constrain_instance(assigned_val.y.cell(), config.ecc_config.maingate_config.instance.clone(), 1)?;
+
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn test_ec_addition() {
+        const K: u32 = 11;
+
+        // useful for debugging
+        let _print_coords = |a: ExtendedPoint, name: &str| {
+            println!("Coordinates {name}: {:?}", a.to_affine().coordinates().unwrap());
+        };
+
+        let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
+        let lhs = ExtendedPoint::random(&mut rng);
+        let rhs = ExtendedPoint::random(&mut rng);
+        let res = lhs + rhs;
+
+        let circuit = TestCircuit {
+            point_a: lhs.to_affine(),
+            point_b: rhs.to_affine(),
+        };
+
+        let res_coords = res.to_affine().coordinates().unwrap();
+        let pi = vec![vec![*res_coords.x(), *res_coords.y()]];
+
+        let prover = MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
+
+        assert!(prover.verify().is_ok());
+
+        let random_result = ExtendedPoint::random(&mut rng);
+        let random_res_coords = random_result.to_affine().coordinates().unwrap();
+
+        let pi = vec![vec![*random_res_coords.x(), *random_res_coords.y()]];
+
+        let prover = MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
+
+        assert!(prover.verify().is_err());
+
+        // Addition with equal points
+        let circuit = TestCircuit {
+            point_a: lhs.to_affine(),
+            point_b: lhs.to_affine(),
+        };
+
+        let res = lhs + lhs;
+        let res_coords = res.to_affine().coordinates().unwrap();
+        let pi = vec![vec![*res_coords.x(), *res_coords.y()]];
+
+        let prover = MockProver::run(K, &circuit, pi). expect("Failed to run EC add with equal points");
+
+        assert!(prover.verify().is_ok());
+
+        // Addition with zero
+        let zero = ExtendedPoint::identity();
+        let circuit = TestCircuit {
+            point_a: zero.to_affine(),
+            point_b: lhs.to_affine(),
+        };
+
+        let res_coords = lhs.to_affine().coordinates().unwrap();
+        let pi = vec![vec![*res_coords.x(), *res_coords.y()]];
+
+        let prover = MockProver::run(K, &circuit, pi). expect("Failed to run EC add with equal points");
+
+        assert!(prover.verify().is_ok());
+
     }
 }
