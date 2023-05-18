@@ -74,7 +74,7 @@ impl Config {
     fn assign_xy(
         &self,
         ctx: &mut RegionCtx<'_, jubjub::Base>,
-        value: Value<(jubjub::Base, jubjub::Base)>,
+        value: &Value<(jubjub::Base, jubjub::Base)>,
     ) -> Result<Coordinates, Error> {
         // Assign `x` value
         let x_val = value.map(|value| value.0);
@@ -84,6 +84,8 @@ impl Config {
         let y_val = value.map(|value| value.1);
         let y_var = ctx.assign_advice(|| "y", self.y, y_val)?;
 
+        ctx.next();
+
         Ok((x_var, y_var))
     }
 
@@ -91,7 +93,7 @@ impl Config {
     pub(super) fn point(
         &self,
         ctx: &mut RegionCtx<'_, jubjub::Base>,
-        value: Value<jubjub::AffinePoint>,
+        value: &Value<jubjub::AffinePoint>,
     ) -> Result<AssignedEccPoint, Error> {
         // Enable `q_point` selector
         ctx.enable(self.q_point)?;
@@ -106,7 +108,7 @@ impl Config {
             }
         });
 
-        self.assign_xy(ctx, value)
+        self.assign_xy(ctx, &value)
             .map(|(x, y)| AssignedEccPoint { x, y })
     }
 }
