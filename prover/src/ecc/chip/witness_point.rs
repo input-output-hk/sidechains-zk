@@ -101,7 +101,7 @@ impl Config {
         let value = value.map(|value| {
             // Map the identity to (0, 0).
             if value == jubjub::AffinePoint::identity() {
-                (jubjub::Base::zero(), jubjub::Base::zero())
+                (jubjub::Base::zero(), jubjub::Base::one())
             } else {
                 let value = value.coordinates().unwrap();
                 (value.x().clone(), value.y().clone())

@@ -297,11 +297,8 @@ impl EccInstructions<AffinePoint> for EccChip
     ) -> Result<Self::Point, Error> {
         let mut assigned_p = base.clone();
 
-        println!("x p init cell: {:?}", assigned_p.x.value());
-        println!("y p init cell: {:?}", assigned_p.y.value());
-
         // Decompose scalar into bits
-        let decomposition = self.main_gate.to_bits(ctx, &scalar.0, 3)?; //Base::NUM_BITS as usize)?;
+        let decomposition = self.main_gate.to_bits(ctx, &scalar.0, Base::NUM_BITS as usize)?;
 
         // Proceed with double and add algorithm for each bit of the scalar
         // Initialise the aggregator at zero
@@ -314,7 +311,7 @@ impl EccInstructions<AffinePoint> for EccChip
         let assigned_0y = ctx.assign_advice(
             || "y of zero",
             self.config.y_qr,
-            Value::known(Base::ZERO),
+            Value::known(Base::ONE),
         )?;
 
         let assigned_0 = AssignedEccPoint {
@@ -327,15 +324,11 @@ impl EccInstructions<AffinePoint> for EccChip
 
         // Constrain the zero point
         self.main_gate.assert_zero(ctx, &assigned_0x)?;
-        self.main_gate.assert_zero(ctx, &assigned_0y)?;
+        self.main_gate.assert_one(ctx, &assigned_0y)?;
 
         for bit in decomposition {
-            println!("Bit: {:?}", bit.value());
             let cond_add_x = self.main_gate.select(ctx, &assigned_p.x, &assigned_0.x, &bit)?;
             let cond_add_y = self.main_gate.select(ctx, &assigned_p.y, &assigned_0.y, &bit)?;
-
-            println!("x cond cell: {:?}", cond_add_x.value());
-            println!("y cond cell: {:?}", cond_add_y.value());
 
             let assigned_cond_add = AssignedEccPoint {
                 x: cond_add_x,
@@ -343,10 +336,7 @@ impl EccInstructions<AffinePoint> for EccChip
             };
 
             // Aggr = Aggr + cond_add
-            let assigned_aggr_a = self.config.add.assign_region(ctx, &assigned_aggr, &assigned_cond_add)?;
-
-            println!("x aggr in loop: {:?}", assigned_aggr_a.x.value());
-            println!("y aggr in loop: {:?}", assigned_aggr_a.y.value());
+            assigned_aggr = self.config.add.assign_region(ctx, &assigned_aggr, &assigned_cond_add)?;
 
             // Point = [2] Point
             assigned_p = self.config.add.assign_region(ctx, &assigned_p, &assigned_p)?;
@@ -431,11 +421,8 @@ mod tests {
 
         let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
         let point = ExtendedPoint::random(&mut rng);
-        let scalar = Scalar::from(7);
-        // let scalar = Scalar::random(&mut rng);
+        let scalar = Scalar::random(&mut rng);
         let res = point.mul(&scalar);
-
-        println!("Coordinates result: {:?}", res.to_affine().coordinates().unwrap());
 
         let circuit = TestCircuit {
             point: point.to_affine(),
@@ -447,17 +434,43 @@ mod tests {
 
         let prover = MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
 
-        prover.verify().unwrap();
         assert!(prover.verify().is_ok());
-        //
-        // let random_result = ExtendedPoint::random(&mut rng);
-        // let random_res_coords = random_result.to_affine().coordinates().unwrap();
-        //
-        // let pi = vec![vec![*random_res_coords.x(), *random_res_coords.y()]];
-        //
-        // let prover = MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
-        //
-        // prover.verify().unwrap();
-        // assert!(prover.verify().is_err());
+
+        let random_result = ExtendedPoint::random(&mut rng);
+        let random_res_coords = random_result.to_affine().coordinates().unwrap();
+
+        let pi = vec![vec![*random_res_coords.x(), *random_res_coords.y()]];
+
+        let prover = MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
+
+        assert!(prover.verify().is_err());
+
+        // mult by one
+        let scalar = Scalar::one();
+        let circuit = TestCircuit {
+            point: point.to_affine(),
+            scalar,
+        };
+
+        let res_coords = point.to_affine().coordinates().unwrap();
+        let pi = vec![vec![*res_coords.x(), *res_coords.y()]];
+
+        let prover = MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
+
+        assert!(prover.verify().is_ok());
+
+        // mult by zero
+        let scalar = Scalar::zero();
+        let circuit = TestCircuit {
+            point: point.to_affine(),
+            scalar,
+        };
+
+        let res_coords = res.to_affine().coordinates().unwrap();
+        let pi = vec![vec![Base::ZERO, Base::ONE]];
+
+        let prover = MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
+
+        assert!(prover.verify().is_ok());
     }
 }
