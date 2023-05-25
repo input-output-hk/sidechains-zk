@@ -17,7 +17,7 @@ use crate::rescue::primitive::RescueState;
 type InputOutputPair<F> = (RescueState<F>, RescueState<F>);
 type KeyedInputOutputPair<F> = (RescueState<F>, RescueState<F>, RescueState<F>);
 
-// PALLAS TEST VECTORS
+// BLS TEST VECTORS
 
 // 1. input = [0, 0, 0, 0]
 //    output = [
@@ -79,10 +79,15 @@ type KeyedInputOutputPair<F> = (RescueState<F>, RescueState<F>, RescueState<F>);
 //                 15389831853393818192027743958259589864161298558336674115539261306710557732681,
 //             ]
 
-pub(super) const PALLAS_TEST_VECTORS: [InputOutputPair<Scalar>; 5] = [
+pub(super) const BLS_TEST_VECTORS: [InputOutputPair<Scalar>; 5] = [
     // [0, 0, 0, 0]
     (
-        [Scalar::zero(), Scalar::zero(), Scalar::zero(), Scalar::zero()],
+        [
+            Scalar::zero(),
+            Scalar::zero(),
+            Scalar::zero(),
+            Scalar::zero(),
+        ],
         [
             Scalar::from_raw([
                 0x09d9c9c46ce84304,
@@ -332,7 +337,7 @@ pub(super) const PALLAS_TEST_VECTORS: [InputOutputPair<Scalar>; 5] = [
     ),
 ];
 
-// PALLAS KEYED TEST VECTORS
+// BLS KEYED TEST VECTORS
 
 // 1. key =    [
 //                 9735478625688776342504896978379841742965837616380352057079874461875789097195,
@@ -410,7 +415,7 @@ pub(super) const PALLAS_TEST_VECTORS: [InputOutputPair<Scalar>; 5] = [
 //                  23344204237294494158214599470155372674477464845643931071956917095214152224407,
 //                  22035843361038170511321637922855609556127976875752592928124069246289692498210,
 //             ]
-pub(super) const PALLAS_TEST_VECTORS_KEYED: [KeyedInputOutputPair<Scalar>; 4] = [
+pub(super) const BLS_TEST_VECTORS_KEYED: [KeyedInputOutputPair<Scalar>; 4] = [
     // random tuple 1,
     (
         [
@@ -732,6 +737,396 @@ pub(super) const PALLAS_TEST_VECTORS_KEYED: [KeyedInputOutputPair<Scalar>; 4] = 
                 0x85dbe457cfed01f3,
                 0x531c1e3cba6887c3,
                 0x30b7d8694db0728b,
+            ]),
+        ],
+    ),
+];
+
+// Sponge Test Vectors
+
+// BLS
+pub(super) const BLS_SPONGE_TEST_VECTORS: [([Scalar; 12], [Scalar; 3]); 4] = [
+    (
+        [
+            Scalar::from_raw([
+                0xf2c4384cd8b0ea6e,
+                0x2c61797f8b9d100f,
+                0x82a589f322e32543,
+                0x97cd624bc3468f1,
+            ]),
+            Scalar::from_raw([
+                0xd353cfcbf5208931,
+                0xbb4ef0c30a7e7c81,
+                0xbe1e58cf79b2121d,
+                0x32bc19543037b128,
+            ]),
+            Scalar::from_raw([
+                0x712c4aa0348c906d,
+                0x4170cc02369b4b51,
+                0x8f8e245983e312be,
+                0x574a0fe37371f412,
+            ]),
+            Scalar::from_raw([
+                0xdcd772aa44db7b73,
+                0x7d033af696a7f2cb,
+                0x30a3c129cb34ab86,
+                0x275c5eed364ea122,
+            ]),
+            Scalar::from_raw([
+                0x973be4cf5724e161,
+                0x88a1ed205768b244,
+                0x5f170862795209e1,
+                0x2258ccc789e3551d,
+            ]),
+            Scalar::from_raw([
+                0x7acc5ce6e7cea8ed,
+                0xace2e2fa44668d05,
+                0x95e9e9463c116ab2,
+                0x5e67b6dd3321e4ad,
+            ]),
+            Scalar::from_raw([
+                0xbed730ad11afa3dc,
+                0x57bc0dccc7f197d0,
+                0x12f6d47f24e589f7,
+                0x187eabe35b609a78,
+            ]),
+            Scalar::from_raw([
+                0xf95f92c57d1f2cbe,
+                0x30ffcece173962dd,
+                0x17372824d02102ae,
+                0x2070e1b9b5fce7b9,
+            ]),
+            Scalar::from_raw([
+                0x52f14d18740f6cda,
+                0x87b3f396b789bd31,
+                0x0fe1b460063e84ac,
+                0x69e42bf0ea2cc194,
+            ]),
+            Scalar::from_raw([
+                0x4eba00f2cf6a0451,
+                0x8f5d8ec515655f8a,
+                0xb92b4b83dca80c9f,
+                0x5e558f24e4b60455,
+            ]),
+            Scalar::from_raw([
+                0x0ccdea3e160d34be,
+                0x419247538ba716b7,
+                0xfe1e2c0b303e5e6e,
+                0x30643cdd431f1514,
+            ]),
+            Scalar::from_raw([
+                0x11a008351e59eef6,
+                0x3f309ccd04008824,
+                0x4a5bf3bdf09ad90f,
+                0x28e3cabecbb44fc6,
+            ]),
+        ],
+        [
+            Scalar::from_raw([
+                0xf600746314e3f95f,
+                0xa2525f53e148d54e,
+                0x8d73c0567af41d66,
+                0x2d9eb8ad759cd1f5,
+            ]),
+            Scalar::from_raw([
+                0x47ff6e6a585c0bc9,
+                0xe30c6d4ade7868ed,
+                0x8801d6684de97bbc,
+                0x432a04afcc5407,
+            ]),
+            Scalar::from_raw([
+                0x96c773da7f70e92a,
+                0xf3888a6f01b9e9aa,
+                0xcd748db6c8abded7,
+                0x448aca668bab642a,
+            ]),
+        ],
+    ),
+    (
+        [
+            Scalar::from_raw([
+                0xcd9dc4885a2a22ec,
+                0x5e1c7f553f49a66a,
+                0x9f4c0cc188b8c4e4,
+                0x2583b99cb61cb54b,
+            ]),
+            Scalar::from_raw([
+                0xf5b477856429b448,
+                0x39ce4c90a234d79a,
+                0x52412e95c6e871ac,
+                0x2bbce215bf22e360,
+            ]),
+            Scalar::from_raw([
+                0x253634f8177ae344,
+                0x2c2efe0f78cc9bab,
+                0xbfc8f5695c0fd7fd,
+                0x55a19ff4d0467ee9,
+            ]),
+            Scalar::from_raw([
+                0x27b557936e838266,
+                0x17db7b0a1baca30a,
+                0x7a0b69b16827078d,
+                0x30bfd7a0c0f75f5d,
+            ]),
+            Scalar::from_raw([
+                0x204f8e441820556f,
+                0x0b1c3296c5881aca,
+                0x599e2e360fd1d61d,
+                0x1aa863f517fe1bc,
+            ]),
+            Scalar::from_raw([
+                0x9e96d8643efee390,
+                0x2bc4f3bc3dedc38d,
+                0x7fbf2008733484a9,
+                0x25834128447b957e,
+            ]),
+            Scalar::from_raw([
+                0x18df334d9aaaa079,
+                0xc45b0bcc08b9e81f,
+                0x12b1f5fe6d6b2992,
+                0x5465c182973bdefd,
+            ]),
+            Scalar::from_raw([
+                0xbf2042061c9ea8e4,
+                0x6bba22fe4ccfca62,
+                0xb6def217f22345fe,
+                0x541281af939bf2bd,
+            ]),
+            Scalar::from_raw([
+                0x74ef712372bd0a25,
+                0x64730c592215567b,
+                0xd70bbb20a9b0d410,
+                0x4824935d586c7c31,
+            ]),
+            Scalar::from_raw([
+                0x22ec157173f3626b,
+                0x3c11f55cf422c14e,
+                0x06bd49fa2e8c6daa,
+                0x2d8246083c0e6466,
+            ]),
+            Scalar::from_raw([
+                0x63d19ccc772ecd2b,
+                0x18a43b2e47e6764b,
+                0xda04250ced3aeaee,
+                0xec4ba75e05c470f,
+            ]),
+            Scalar::from_raw([
+                0x61884c9154f73bdf,
+                0x673e2b284da0bcf7,
+                0x5fee5efa3a7b2ebc,
+                0x4743dfe3cec74908,
+            ]),
+        ],
+        [
+            Scalar::from_raw([
+                0xeb7872ce9f8a55a7,
+                0x0428689eb16df7ad,
+                0xb4ba188f70ecb488,
+                0x70f9f982f07f78a5,
+            ]),
+            Scalar::from_raw([
+                0x7681281d49992b35,
+                0xbbf79f7e07896558,
+                0x41d369403241398c,
+                0x43fd5d2e557a2d90,
+            ]),
+            Scalar::from_raw([
+                0x5fe386a311c60c7a,
+                0xe5521f969716bbf5,
+                0x4b2d0452cf07a12e,
+                0xeca7c8597677022,
+            ]),
+        ],
+    ),
+    (
+        [
+            Scalar::from_raw([
+                0x839ebd799319318e,
+                0x7a0a1dae9c79d6f6,
+                0xefe33249b856eaf9,
+                0xd2c3fc24c085a1d,
+            ]),
+            Scalar::from_raw([
+                0xf839b35033f6cfe2,
+                0xb84b34921ac44fa3,
+                0xd86b2fe0f71a0e52,
+                0x40f6bbaebd016d33,
+            ]),
+            Scalar::from_raw([
+                0x56d72cd3c0e6e618,
+                0xc265044c284edb5f,
+                0x5c03166f198a0c65,
+                0xd7ba0f823a066f9,
+            ]),
+            Scalar::from_raw([
+                0x68d9b079820e6032,
+                0x231d8c83c55c7b0d,
+                0x6369a633dbfbed5a,
+                0x129dcb8a8fd0ea19,
+            ]),
+            Scalar::from_raw([
+                0xca87ddb5961beaa4,
+                0x5f24caf341df414e,
+                0x68b19754eee9d26b,
+                0x280e1c6cf0626684,
+            ]),
+            Scalar::from_raw([
+                0x96d326bd1d77dca1,
+                0xd985f46bc3f8a634,
+                0xbf7f6e699fefbf22,
+                0x247a45e3a36ac6b1,
+            ]),
+            Scalar::from_raw([
+                0x7705f55d480a24ff,
+                0xc0962b9ba290b33c,
+                0xc80e591f75d17903,
+                0x5fa730f1a2ab3293,
+            ]),
+            Scalar::from_raw([
+                0x2e149706bd30c04d,
+                0x4b13f1059aa58e01,
+                0x3aea7b41941a84f3,
+                0x5bd42342d0c9e3f0,
+            ]),
+            Scalar::from_raw([
+                0x96a50b78ca81e3fc,
+                0x81e14d6fddba6acd,
+                0x3aaa19c521a50612,
+                0x10e58082aba5455b,
+            ]),
+            Scalar::from_raw([
+                0xd6f0d1df74029e12,
+                0x22fa44067f8f0dde,
+                0x78a859c17cce6321,
+                0x11b5ad9e71b2b18f,
+            ]),
+            Scalar::from_raw([
+                0x093f28214e172fe7,
+                0x7a4108632919e6e2,
+                0x41b0583cf1ed7c10,
+                0xae184e0399dc776,
+            ]),
+            Scalar::from_raw([
+                0xfbd40af573e86ac8,
+                0x2ed7606e94054289,
+                0x4943f61868e898c8,
+                0x5837deb55924a35f,
+            ]),
+        ],
+        [
+            Scalar::from_raw([
+                0xb6e93562fcfe61d6,
+                0xfeb8f7ddf4efca26,
+                0xa23827d4773db0ee,
+                0x2b096cc8fc16dde9,
+            ]),
+            Scalar::from_raw([
+                0x2a549a19ba7a2247,
+                0xd6217c03489ad66a,
+                0x358d4b275795ead2,
+                0x568e7993dd6f9360,
+            ]),
+            Scalar::from_raw([
+                0x37de4a223eac43e1,
+                0x4afcccae8aac7e8c,
+                0x55c3eb4ed0745b40,
+                0x1d77e061eb9971cc,
+            ]),
+        ],
+    ),
+    (
+        [
+            Scalar::from_raw([
+                0x08334fef0c8df75d,
+                0x56c2334323c063ec,
+                0xf7ad6e9cc40dc9a0,
+                0x42c712a8e874d752,
+            ]),
+            Scalar::from_raw([
+                0x126a219bc880b5a7,
+                0x3ea90c62913ab1ee,
+                0xd9af4ff92442cfb5,
+                0x324de6f5498e6d18,
+            ]),
+            Scalar::from_raw([
+                0x2ff1565fbc74383e,
+                0x556a4043b82ab7aa,
+                0x7cfd56c2bd3b2205,
+                0x5f7e1629bc91af5f,
+            ]),
+            Scalar::from_raw([
+                0xc6b6bb0023cc2fe9,
+                0x0bfae6f571c379c0,
+                0x1fddfeba593bd401,
+                0x1441e394376256a7,
+            ]),
+            Scalar::from_raw([
+                0x10a4979afe865c55,
+                0x72de33f1ee7b9a5d,
+                0xc932cfc6c958328b,
+                0x2c8ac5451be55ecf,
+            ]),
+            Scalar::from_raw([
+                0x0808a877732a1895,
+                0x89e0b5b4e9fc02e4,
+                0x988c2a88226243ce,
+                0x2e235a473cfef0a3,
+            ]),
+            Scalar::from_raw([
+                0xb0c80eb2af7cfa7e,
+                0xde3960eb855e0be9,
+                0x17f77f2f6b3a7638,
+                0x2ec2ba98c7c3a6a5,
+            ]),
+            Scalar::from_raw([
+                0x78a293d26ca53675,
+                0xa918afa864ea0112,
+                0x508a9d3766cb220c,
+                0x6dc8abf1172b00c8,
+            ]),
+            Scalar::from_raw([
+                0x5236414f6e9dbd73,
+                0x4af9d684845fd537,
+                0x4dc41a05073f1e6a,
+                0x119c8649ed47a432,
+            ]),
+            Scalar::from_raw([
+                0x7c379555f1fe2eac,
+                0x0e6e22abad4913de,
+                0x28870cdb4ba35e87,
+                0x52a76e355d0bda85,
+            ]),
+            Scalar::from_raw([
+                0x2ad3554f4d0d487d,
+                0x8e483ff978e24d8b,
+                0x00cd0e42eb0af52f,
+                0x2f61f1b5009b3edf,
+            ]),
+            Scalar::from_raw([
+                0x02de330b333e74f1,
+                0x6238df56e3cb3692,
+                0xf3a432486da9b8a1,
+                0x416355fa38f0833a,
+            ]),
+        ],
+        [
+            Scalar::from_raw([
+                0x247c002f23627aa0,
+                0x28efd11a224db357,
+                0xb9550a44c6b76b82,
+                0x64a2ec20f5dd489b,
+            ]),
+            Scalar::from_raw([
+                0x07dea12d08ec21c5,
+                0xe7e66895b2d41f07,
+                0xb93bf23d9dd55def,
+                0x6ab3c6a75e89d95b,
+            ]),
+            Scalar::from_raw([
+                0xf2b22af5a24c77be,
+                0xce72598861cf93d5,
+                0x9f7a0ab4fb351521,
+                0x32f066c7bf9f8e0,
             ]),
         ],
     ),
