@@ -1,8 +1,10 @@
+use super::AssignedEccPoint;
 use group::Group;
-use super::{AssignedEccPoint};
 
 use group::prime::PrimeCurveAffine;
 
+use crate::ecc::chip::add::EDWARDS_D;
+use crate::util::RegionCtx;
 use halo2_proofs::{
     circuit::{AssignedCell, Region, Value},
     plonk::{
@@ -12,8 +14,6 @@ use halo2_proofs::{
     poly::Rotation,
 };
 use halo2curves::{jubjub, CurveAffine};
-use crate::ecc::chip::add::EDWARDS_D;
-use crate::util::RegionCtx;
 
 type Coordinates = (
     AssignedCell<jubjub::Base, jubjub::Base>,
@@ -46,7 +46,10 @@ impl Config {
             let y_square = meta.query_advice(config.y, Rotation::cur()).square();
 
             // -x^2 + y^2 = 1 + d * x^2 * y^2
-            y_square.clone() - x_square.clone() - (Expression::Constant(jubjub::Fq::one()) + Expression::Constant(EDWARDS_D) * x_square * y_square)
+            y_square.clone()
+                - x_square.clone()
+                - (Expression::Constant(jubjub::Fq::one())
+                    + Expression::Constant(EDWARDS_D) * x_square * y_square)
         };
 
         meta.create_gate("witness point", |meta| {

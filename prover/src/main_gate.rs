@@ -12,15 +12,15 @@
 //!
 //! TODO: once we progress with the circuit, check if we actually need this number of columns.
 
-use std::iter;
-use std::marker::PhantomData;
+use crate::instructions::{CombinationOptionCommon, MainGateInstructions, Term};
+use crate::util::{pow_5, RegionCtx};
+use crate::{AssignedCondition, AssignedValue};
 use halo2_proofs::circuit::{Chip, Layouter, Value};
 use halo2_proofs::plonk::{Advice, Column, ConstraintSystem, Error, Expression, Fixed, Instance};
 use halo2_proofs::poly::Rotation;
 use halo2curves::ff::PrimeField;
-use crate::{AssignedCondition, AssignedValue};
-use crate::instructions::{CombinationOptionCommon, MainGateInstructions, Term};
-use crate::util::RegionCtx;
+use std::iter;
+use std::marker::PhantomData;
 
 const WIDTH: usize = 5;
 
@@ -110,7 +110,6 @@ pub struct MainGateConfig {
     pub(crate) q_h2: Column<Fixed>,
     pub(crate) q_h3: Column<Fixed>,
     pub(crate) q_h4: Column<Fixed>,
-
 }
 
 impl MainGateConfig {
@@ -338,22 +337,22 @@ impl<F: PrimeField> MainGateInstructions<F, WIDTH> for MainGate<F> {
             self.config.d,
             self.config.e,
         ]
-            .into_iter()
-            .zip([
-                self.config.sa,
-                self.config.sb,
-                self.config.sc,
-                self.config.sd,
-                self.config.se,
-            ])
-            .zip(terms.iter().chain(iter::repeat(&Term::Zero)))
-            .enumerate()
-            .map(|(idx, ((coeff, base), term))| {
-                let assigned = ctx.assign_advice(|| format!("coeff_{idx}"), coeff, term.coeff())?;
-                ctx.assign_fixed(|| format!("base_{idx}"), base, term.base())?;
-                Ok(assigned)
-            })
-            .collect::<Result<Vec<_>, Error>>()?;
+        .into_iter()
+        .zip([
+            self.config.sa,
+            self.config.sb,
+            self.config.sc,
+            self.config.sd,
+            self.config.se,
+        ])
+        .zip(terms.iter().chain(iter::repeat(&Term::Zero)))
+        .enumerate()
+        .map(|(idx, ((coeff, base), term))| {
+            let assigned = ctx.assign_advice(|| format!("coeff_{idx}"), coeff, term.coeff())?;
+            ctx.assign_fixed(|| format!("base_{idx}"), base, term.base())?;
+            Ok(assigned)
+        })
+        .collect::<Result<Vec<_>, Error>>()?;
 
         ctx.assign_fixed(|| "s_constant", self.config.s_constant, constant)?;
 
@@ -455,6 +454,116 @@ impl<F: PrimeField> MainGateInstructions<F, WIDTH> for MainGate<F> {
         ctx.assign_fixed(|| "s_constant", self.config.s_constant, F::ZERO)?;
         ctx.next();
         Ok(())
+    }
+
+    fn assert_pow_5(
+        &self,
+        ctx: &mut RegionCtx<'_, F>,
+        val5: &AssignedValue<F>,
+        val: Value<F>,
+    ) -> Result<AssignedValue<F>, Error> {
+        // assign witness val (val should be val5^{1/5})
+        let assigned = ctx.assign_advice(|| "advice_0", self.config.a, val)?;
+        ctx.assign_advice(|| "advice_4", self.config.e, val5.value().copied())?;
+
+        // Assign constants
+        ctx.assign_fixed(|| "q_h1", self.config.q_h1, F::ONE)?;
+        ctx.assign_fixed(|| "se", self.config().se, -F::ONE)?;
+
+        // Set to 0 the rest of selectors, except e
+        ctx.assign_fixed(|| "s_mul_ab", self.config().s_mul_ab, F::ZERO)?;
+        ctx.assign_fixed(|| "s_mul_cd", self.config().s_mul_cd, F::ZERO)?;
+        ctx.assign_fixed(|| "sa", self.config().sa, F::ZERO)?;
+        ctx.assign_fixed(|| "sb", self.config().sb, F::ZERO)?;
+        ctx.assign_fixed(|| "sc", self.config().sc, F::ZERO)?;
+        ctx.assign_fixed(|| "sd", self.config().sd, F::ZERO)?;
+        ctx.assign_fixed(|| "se_next", self.config().se_next, F::ZERO)?;
+        ctx.assign_fixed(|| "s_constant", self.config().s_constant, F::ZERO)?;
+        ctx.assign_fixed(|| "q_h2", self.config.q_h2, F::ZERO)?;
+        ctx.assign_fixed(|| "q_h3", self.config.q_h3, F::ZERO)?;
+        ctx.assign_fixed(|| "q_h4", self.config.q_h4, F::ZERO)?;
+        ctx.next();
+
+        Ok(assigned)
+    }
+
+    fn sum_pow_5_const(
+        &self,
+        ctx: &mut RegionCtx<'_, F>,
+        vals: [&AssignedValue<F>; 4],
+        constants: [F; 4],
+        aff_constant: F,
+    ) -> Result<AssignedValue<F>, Error> {
+        // Assign input witness
+        [self.config.a, self.config.b, self.config.c, self.config.d]
+            .into_iter()
+            .zip(vals.iter())
+            .enumerate()
+            .map(|(i, (column, value))| {
+                ctx.assign_advice(|| format!("advice_{i}"), column, value.value().copied())
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
+
+        //Compute and assign result
+        let result = vals
+            .iter()
+            .zip(constants.iter())
+            .fold(Value::known(aff_constant), |acc, (val, c)| {
+                acc.and_then(|a| val.value().map(|v| a + pow_5(*v) * c))
+            });
+
+        let assigned = ctx.assign_advice(|| "advice_4", self.config.e, result)?;
+
+        // Assign constants
+        ctx.assign_fixed(|| "q_h1", self.config.q_h1, constants[0])?;
+        ctx.assign_fixed(|| "q_h2", self.config.q_h2, constants[1])?;
+        ctx.assign_fixed(|| "q_h3", self.config.q_h3, constants[2])?;
+        ctx.assign_fixed(|| "q_h4", self.config.q_h4, constants[3])?;
+        ctx.assign_fixed(|| "s_constant", self.config.s_constant, aff_constant)?;
+
+        // Set to 0 the rest of selectors, except e
+        ctx.assign_fixed(|| "s_mul_ab", self.config().s_mul_ab, F::ZERO)?;
+        ctx.assign_fixed(|| "s_mul_cd", self.config().s_mul_cd, F::ZERO)?;
+        ctx.assign_fixed(|| "sc", self.config().sc, F::ZERO)?;
+        ctx.assign_fixed(|| "sa", self.config().sa, F::ZERO)?;
+        ctx.assign_fixed(|| "sb", self.config().sb, F::ZERO)?;
+        ctx.assign_fixed(|| "sd", self.config().sd, F::ZERO)?;
+        ctx.assign_fixed(|| "se", self.config().se, -F::ONE)?;
+        ctx.assign_fixed(|| "se_next", self.config().se_next, F::ZERO)?;
+        ctx.next();
+
+        Ok(assigned)
+    }
+
+    fn const_affine_transformation(
+        &self,
+        ctx: &mut RegionCtx<'_, F>,
+        vals: [&AssignedValue<F>; 4],
+        constants: [F; 4],
+        aff_constant: F,
+    ) -> Result<AssignedValue<F>, Error> {
+        let result = vals
+            .iter()
+            .zip(constants.iter())
+            .fold(Value::known(aff_constant), |acc, (val, c)| {
+                acc.and_then(|a| val.value().map(|v| a + *v * c))
+            });
+
+        let assigned = self
+            .apply(
+                ctx,
+                [
+                    Term::Assigned(vals[0], constants[0]),
+                    Term::Assigned(vals[1], constants[1]),
+                    Term::Assigned(vals[2], constants[2]),
+                    Term::Assigned(vals[3], constants[3]),
+                    Term::unassigned_to_sub(result),
+                ],
+                aff_constant,
+                CombinationOptionCommon::OneLinerAdd.into(),
+            )?
+            .swap_remove(4);
+        Ok(assigned)
     }
 }
 
@@ -572,7 +681,7 @@ impl<F: PrimeField> MainGate<F> {
 
         MainGate {
             config,
-            _marker: Default::default()
+            _marker: Default::default(),
         }
     }
 }

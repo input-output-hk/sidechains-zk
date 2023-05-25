@@ -1,7 +1,7 @@
 extern crate core;
 
+use crate::proof::{prove, EdDsaPk, EdDsaSig, MtCommitment, PlonkProof};
 use core::slice;
-use crate::proof::{EdDsaPk, EdDsaSig, MtCommitment, PlonkProof, prove};
 
 pub const NULLPOINTERERR: i64 = -99;
 
@@ -42,9 +42,20 @@ pub extern "C" fn atms_prove(
     avk: MtCommitmentPtr,
 ) -> i64 {
     unsafe {
-        if let (Some(proof_ref), Some(&pks_ref), Some(&sigs_ref), Some(avk_ref)) = (proof_ptr.as_mut(), pks_ptr.as_ref(), sigs_ptr.as_ref(), avk.as_ref()) {
-            let pks = slice::from_raw_parts_mut(pks_ref, nr_sigs).iter().map(|p| *p).collect::<Vec<_>>();
-            let sigs  = slice::from_raw_parts_mut(sigs_ref, nr_sigs).iter().map(|p| *p).collect::<Vec<_>>();
+        if let (Some(proof_ref), Some(&pks_ref), Some(&sigs_ref), Some(avk_ref)) = (
+            proof_ptr.as_mut(),
+            pks_ptr.as_ref(),
+            sigs_ptr.as_ref(),
+            avk.as_ref(),
+        ) {
+            let pks = slice::from_raw_parts_mut(pks_ref, nr_sigs)
+                .iter()
+                .map(|p| *p)
+                .collect::<Vec<_>>();
+            let sigs = slice::from_raw_parts_mut(sigs_ref, nr_sigs)
+                .iter()
+                .map(|p| *p)
+                .collect::<Vec<_>>();
 
             if let Ok(proof) = prove(&pks, &sigs, avk_ref) {
                 *proof_ref = Box::into_raw(Box::new(proof));
@@ -52,7 +63,6 @@ pub extern "C" fn atms_prove(
             } else {
                 return 0;
             }
-
         }
 
         return 1;

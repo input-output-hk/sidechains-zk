@@ -10,23 +10,22 @@ use halo2_proofs::{
 };
 use halo2curves::CurveAffine;
 
-use std::convert::TryInto;
-use std::fmt::Debug;
 use group::{Curve, Group};
 use halo2curves::jubjub::{AffinePoint, Base, Scalar};
-
+use std::convert::TryInto;
+use std::fmt::Debug;
 
 pub(super) mod add;
 pub mod constants;
 // pub(super) mod mul_bin;
 pub(super) mod witness_point;
 
-pub use constants::*;
-use crate::AssignedValue;
 use crate::ecc::chip::add::AddConfig;
 use crate::instructions::MainGateInstructions;
 use crate::main_gate::{MainGate, MainGateConfig};
 use crate::util::RegionCtx;
+use crate::AssignedValue;
+pub use constants::*;
 
 /// A curve point represented in affine (x, y) coordinates, or the
 /// identity represented as (0, 0).
@@ -102,7 +101,6 @@ pub struct EccConfig {
 
     // /// Variable-base scalar multiplication
     // mul: mul::Config,
-
     /// Witness point
     witness_point: witness_point::Config,
 }
@@ -139,13 +137,9 @@ impl EccChip {
         let scalar_mul = meta.advice_column();
         meta.enable_equality(scalar_mul);
 
-        let add_config = add::AddConfig::configure(
-            meta, x_p, y_p, x_qr, y_qr, alpha, beta
-        );
+        let add_config = add::AddConfig::configure(meta, x_p, y_p, x_qr, y_qr, alpha, beta);
 
-        let witness_config = witness_point::Config::configure(
-            meta, x_p, y_p
-        );
+        let witness_config = witness_point::Config::configure(meta, x_p, y_p);
 
         EccConfig {
             maingate_config: MainGate::configure(meta).config().clone(),
@@ -157,7 +151,7 @@ impl EccChip {
             beta,
             scalar_mul,
             add: add_config,
-            witness_point: witness_config
+            witness_point: witness_config,
         }
     }
 }
@@ -176,9 +170,7 @@ impl Chip<Base> for EccChip {
 }
 
 /// The set of circuit instructions required to use the ECC gadgets.
-pub trait EccInstructions<C: CurveAffine>:
-Chip<C::Base> + Clone + Debug
-{
+pub trait EccInstructions<C: CurveAffine>: Chip<C::Base> + Clone + Debug {
     /// Variable representing a scalar used in variable-base scalar mul.
     ///
     /// This type is treated as a full-width scalar. However, if `Self` implements
@@ -234,10 +226,9 @@ Chip<C::Base> + Clone + Debug
 
 /// Structure representing a `Scalar` used in variable-base multiplication.
 #[derive(Clone, Debug)]
-pub struct ScalarVar (AssignedValue<Base>);
+pub struct ScalarVar(AssignedValue<Base>);
 
-impl EccInstructions<AffinePoint> for EccChip
-{
+impl EccInstructions<AffinePoint> for EccChip {
     type ScalarVar = ScalarVar;
     type Point = AssignedEccPoint;
     type X = AssignedValue<Base>;
@@ -269,7 +260,8 @@ impl EccInstructions<AffinePoint> for EccChip
         value: &Value<Scalar>,
     ) -> Result<Self::ScalarVar, Error> {
         let value_with_base = value.map(|v| Base::from_bytes(&v.to_bytes()).unwrap());
-        let scalar = ctx.assign_advice(|| "assign scalar", self.config.scalar_mul, value_with_base)?;
+        let scalar =
+            ctx.assign_advice(|| "assign scalar", self.config.scalar_mul, value_with_base)?;
         ctx.next();
         Ok(ScalarVar(scalar))
     }
@@ -282,11 +274,7 @@ impl EccInstructions<AffinePoint> for EccChip
     ) -> Result<Self::Point, Error> {
         let config = self.config().add;
 
-        config.assign_region(
-            ctx,
-            &a,
-            &b,
-        )
+        config.assign_region(ctx, &a, &b)
     }
 
     fn mul(
@@ -298,25 +286,21 @@ impl EccInstructions<AffinePoint> for EccChip
         let mut assigned_p = base.clone();
 
         // Decompose scalar into bits
-        let decomposition = self.main_gate.to_bits(ctx, &scalar.0, Base::NUM_BITS as usize)?;
+        let decomposition = self
+            .main_gate
+            .to_bits(ctx, &scalar.0, Base::NUM_BITS as usize)?;
 
         // Proceed with double and add algorithm for each bit of the scalar
         // Initialise the aggregator at zero
-        let assigned_0x = ctx.assign_advice(
-            || "x of zero",
-            self.config.x_qr,
-            Value::known(Base::ZERO),
-        )?;
+        let assigned_0x =
+            ctx.assign_advice(|| "x of zero", self.config.x_qr, Value::known(Base::ZERO))?;
 
-        let assigned_0y = ctx.assign_advice(
-            || "y of zero",
-            self.config.y_qr,
-            Value::known(Base::ONE),
-        )?;
+        let assigned_0y =
+            ctx.assign_advice(|| "y of zero", self.config.y_qr, Value::known(Base::ONE))?;
 
         let assigned_0 = AssignedEccPoint {
             x: assigned_0x.clone(),
-            y: assigned_0y.clone()
+            y: assigned_0y.clone(),
         };
 
         // We clone the cell of zero, to make it mutable for ease of looping over the bits
@@ -327,19 +311,29 @@ impl EccInstructions<AffinePoint> for EccChip
         self.main_gate.assert_one(ctx, &assigned_0y)?;
 
         for bit in decomposition {
-            let cond_add_x = self.main_gate.select(ctx, &assigned_p.x, &assigned_0.x, &bit)?;
-            let cond_add_y = self.main_gate.select(ctx, &assigned_p.y, &assigned_0.y, &bit)?;
+            let cond_add_x = self
+                .main_gate
+                .select(ctx, &assigned_p.x, &assigned_0.x, &bit)?;
+            let cond_add_y = self
+                .main_gate
+                .select(ctx, &assigned_p.y, &assigned_0.y, &bit)?;
 
             let assigned_cond_add = AssignedEccPoint {
                 x: cond_add_x,
-                y: cond_add_y
+                y: cond_add_y,
             };
 
             // Aggr = Aggr + cond_add
-            assigned_aggr = self.config.add.assign_region(ctx, &assigned_aggr, &assigned_cond_add)?;
+            assigned_aggr =
+                self.config
+                    .add
+                    .assign_region(ctx, &assigned_aggr, &assigned_cond_add)?;
 
             // Point = [2] Point
-            assigned_p = self.config.add.assign_region(ctx, &assigned_p, &assigned_p)?;
+            assigned_p = self
+                .config
+                .add
+                .assign_region(ctx, &assigned_p, &assigned_p)?;
         }
 
         Ok(assigned_aggr)
@@ -348,18 +342,18 @@ impl EccInstructions<AffinePoint> for EccChip
 
 #[cfg(test)]
 mod tests {
-    use std::ops::Mul;
+    use crate::ecc::chip::{EccChip, EccConfig, EccInstructions};
+    use crate::util::RegionCtx;
     use ff::Field;
     use group::{Curve, Group};
     use halo2_proofs::circuit::{Layouter, SimpleFloorPlanner, Value};
     use halo2_proofs::dev::MockProver;
     use halo2_proofs::plonk::{Circuit, ConstraintSystem, Error};
-    use halo2curves::CurveAffine;
     use halo2curves::jubjub::{AffinePoint, Base, ExtendedPoint, Scalar};
+    use halo2curves::CurveAffine;
     use rand_chacha::ChaCha8Rng;
     use rand_core::SeedableRng;
-    use crate::ecc::chip::{EccChip, EccConfig, EccInstructions};
-    use crate::util::RegionCtx;
+    use std::ops::Mul;
 
     #[derive(Clone)]
     struct TestCircuitConfig {
@@ -384,9 +378,7 @@ mod tests {
             let ecc_config = EccChip::configure(meta);
             // todo: do we need to enable equality?
 
-            Self::Config {
-                ecc_config,
-            }
+            Self::Config { ecc_config }
         }
 
         fn synthesize(
@@ -401,15 +393,25 @@ mod tests {
                 |region| {
                     let offset = 0;
                     let mut ctx = RegionCtx::new(region, offset);
-                    let assigned_scalar = ecc_chip.witness_scalar_var(&mut ctx, &Value::known(self.scalar))?;
-                    let assigned_point = ecc_chip.witness_point(&mut ctx, &Value::known(self.point))?;
+                    let assigned_scalar =
+                        ecc_chip.witness_scalar_var(&mut ctx, &Value::known(self.scalar))?;
+                    let assigned_point =
+                        ecc_chip.witness_point(&mut ctx, &Value::known(self.point))?;
 
                     ecc_chip.mul(&mut ctx, &assigned_scalar, &assigned_point)
                 },
             )?;
 
-            layouter.constrain_instance(assigned_val.x.cell(), config.ecc_config.maingate_config.instance.clone(), 0)?;
-            layouter.constrain_instance(assigned_val.y.cell(), config.ecc_config.maingate_config.instance.clone(), 1)?;
+            layouter.constrain_instance(
+                assigned_val.x.cell(),
+                config.ecc_config.maingate_config.instance.clone(),
+                0,
+            )?;
+            layouter.constrain_instance(
+                assigned_val.y.cell(),
+                config.ecc_config.maingate_config.instance.clone(),
+                1,
+            )?;
 
             Ok(())
         }
@@ -432,7 +434,8 @@ mod tests {
         let res_coords = res.to_affine().coordinates().unwrap();
         let pi = vec![vec![*res_coords.x(), *res_coords.y()]];
 
-        let prover = MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
+        let prover =
+            MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
 
         assert!(prover.verify().is_ok());
 
@@ -441,7 +444,8 @@ mod tests {
 
         let pi = vec![vec![*random_res_coords.x(), *random_res_coords.y()]];
 
-        let prover = MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
+        let prover =
+            MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
 
         assert!(prover.verify().is_err());
 
@@ -455,7 +459,8 @@ mod tests {
         let res_coords = point.to_affine().coordinates().unwrap();
         let pi = vec![vec![*res_coords.x(), *res_coords.y()]];
 
-        let prover = MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
+        let prover =
+            MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
 
         assert!(prover.verify().is_ok());
 
@@ -469,7 +474,8 @@ mod tests {
         let res_coords = res.to_affine().coordinates().unwrap();
         let pi = vec![vec![Base::ZERO, Base::ONE]];
 
-        let prover = MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
+        let prover =
+            MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
 
         assert!(prover.verify().is_ok());
     }

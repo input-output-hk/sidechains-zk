@@ -2,6 +2,8 @@
 //! gate. While many of implementations takes place here they can be overridden
 //! for optimisation purposes.
 
+use crate::main_gate::{ColumnTags, MainGateColumn};
+use crate::util::{big_to_fe, decompose, fe_to_big, power_of_two, RegionCtx};
 use crate::{AssignedCondition, AssignedValue};
 use ff::PrimeField;
 use halo2_proofs::{
@@ -10,8 +12,6 @@ use halo2_proofs::{
     plonk::Error,
 };
 use std::iter;
-use crate::main_gate::{ColumnTags, MainGateColumn};
-use crate::util::{big_to_fe, decompose, fe_to_big, power_of_two, RegionCtx};
 
 /// `Term`s are input arguments for the current rows that are about to be
 /// constrained in the main gate equation. Three types of terms can be expected.
@@ -1142,7 +1142,7 @@ pub trait MainGateInstructions<F: PrimeField, const WIDTH: usize>: Chip<F> {
             } else {
                 CombinationOptionCommon::CombineToNextAdd(-F::ONE)
             }
-                .into(),
+            .into(),
         )?;
 
         // And the rest if there are more terms
@@ -1166,7 +1166,7 @@ pub trait MainGateInstructions<F: PrimeField, const WIDTH: usize>: Chip<F> {
                     } else {
                         CombinationOptionCommon::CombineToNextAdd(-F::ONE)
                     }
-                        .into(),
+                    .into(),
                 )?;
 
                 intermediate_sum = intermediate_sum
@@ -1203,4 +1203,36 @@ pub trait MainGateInstructions<F: PrimeField, const WIDTH: usize>: Chip<F> {
         self.apply(ctx, [], F::ONE, CombinationOptionCommon::OneLinerAdd.into())?;
         Ok(())
     }
+
+    /// Affine combination of 4 values added with a constant affine value.
+    /// Result is sum( vals[i] * constants[i] + aff_constant)
+    fn const_affine_transformation(
+        &self,
+        ctx: &mut RegionCtx<'_, F>,
+        vals: [&AssignedValue<F>; 4],
+        constants: [F; 4],
+        aff_constant: F,
+    ) -> Result<AssignedValue<F>, Error>;
+
+    /// Given an assinged value val5 and a value val asserts that val5 = val^{5}. This is
+    /// equivalent to val5 = val^{1/5}. This is used to assert the state_inversion in specs.
+    /// This is not directly implemented (but only asserts the operation) to keep the CAP gate
+    /// independent of the field choice which determines the exponent 1/5
+    /// In specs: state inversion
+    fn assert_pow_5(
+        &self,
+        ctx: &mut RegionCtx<'_, F>,
+        val5: &AssignedValue<F>,
+        val: Value<F>,
+    ) -> Result<AssignedValue<F>, Error>;
+
+    /// Computes sum( constant[i] * value[i]^5 + c)
+    /// In specs: Non-linear Transformations
+    fn sum_pow_5_const(
+        &self,
+        ctx: &mut RegionCtx<'_, F>,
+        vals: [&AssignedValue<F>; 4],
+        constants: [F; 4],
+        aff_constant: F,
+    ) -> Result<AssignedValue<F>, Error>;
 }

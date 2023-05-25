@@ -1,7 +1,7 @@
 //! Proof wrapper. API for higher level abstraction.
 
-use jubjub::{SubgroupPoint, Scalar};
-use bls12_381::{Scalar as BlsScalar};
+use bls12_381::Scalar as BlsScalar;
+use jubjub::{Scalar, SubgroupPoint};
 
 /// EdDSA Public key, represented by a point in the subgroup of the JubJub curve
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

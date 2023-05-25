@@ -56,13 +56,13 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 
-
 use halo2_proofs::circuit::AssignedCell;
 
-mod prover;
+mod ecc;
 mod instructions;
 mod main_gate;
-mod ecc;
+mod prover;
+mod rescue;
 
 mod c_api;
 pub mod proof;

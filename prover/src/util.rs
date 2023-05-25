@@ -6,6 +6,8 @@ use halo2_proofs::{
 };
 use num_bigint::BigUint;
 use num_traits::{Num, One};
+use std::ops::Mul;
+use std::process::Output;
 use std::{iter, ops::Shl};
 
 #[cfg(test)]
@@ -154,4 +156,13 @@ pub(crate) fn random_scalar_array<const SIZE: usize, F: PrimeField, R: RngCore +
     }
 
     vec.try_into().unwrap()
+}
+
+/// Raises val to the 5th power using 3 multiplications
+pub(crate) fn pow_5<M>(val: M) -> M
+where
+    M: Mul<M, Output = M> + Clone,
+{
+    let val2 = val.clone() * val.clone();
+    val2.clone() * val2 * val
 }
