@@ -104,7 +104,7 @@ pub struct MainGateConfig {
     pub(crate) s_mul_cd: Column<Fixed>,
 
     pub(crate) s_constant: Column<Fixed>,
-    pub(crate) instance: Column<Instance>,
+    pub instance: Column<Instance>,
 
     pub(crate) q_h1: Column<Fixed>,
     pub(crate) q_h2: Column<Fixed>,

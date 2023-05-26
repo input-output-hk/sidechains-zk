@@ -35,7 +35,7 @@ type AssignedKeyInjection<F> = [AssignedRescueState<F>; 2 * N_ROUNDS + 1];
 /// Configuration for RescuePermGate. This simply contains the CapGateConfig.
 #[derive(Clone, Debug)]
 pub struct RescuePermGateConfig {
-    pub(crate) maingate_config: MainGateConfig,
+    pub maingate_config: MainGateConfig,
 }
 
 /// Rescue Permutation Gate. It consists of CapGate and depends on rescue parameters which in turn

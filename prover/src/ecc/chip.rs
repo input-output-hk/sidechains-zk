@@ -35,11 +35,11 @@ pub struct AssignedEccPoint {
     /// x-coordinate
     ///
     /// Stored as an `Assigned<F>` to enable batching inversions.
-    x: AssignedValue<Base>,
+    pub x: AssignedValue<Base>,
     /// y-coordinate
     ///
     /// Stored as an `Assigned<F>` to enable batching inversions.
-    y: AssignedValue<Base>,
+    pub y: AssignedValue<Base>,
 }
 
 impl AssignedEccPoint {
@@ -86,7 +86,7 @@ impl AssignedEccPoint {
 #[derive(Clone, Debug)]
 #[allow(non_snake_case)]
 pub struct EccConfig {
-    maingate_config: MainGateConfig,
+    pub maingate_config: MainGateConfig,
     /// Advice columns needed
     x_p: Column<Advice>,
     y_p: Column<Advice>,
@@ -108,7 +108,7 @@ pub struct EccConfig {
 /// An [`EccInstructions`] chip that uses 10 advice columns.
 #[derive(Clone, Debug)]
 pub struct EccChip {
-    main_gate: MainGate<Base>,
+    pub main_gate: MainGate<Base>,
     config: EccConfig,
 }
 
@@ -471,7 +471,6 @@ mod tests {
             scalar,
         };
 
-        let res_coords = res.to_affine().coordinates().unwrap();
         let pi = vec![vec![Base::ZERO, Base::ONE]];
 
         let prover =

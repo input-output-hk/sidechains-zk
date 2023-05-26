@@ -25,7 +25,7 @@ fn get_refs<F: PrimeField>(state: &[AssignedValue<F>; 4]) -> [&AssignedValue<F>;
 /// Configuration for RescuePermGate. This simply contains the CapGateConfig.
 #[derive(Clone, Debug)]
 pub struct RescueCrhfGateConfig {
-    rescue_perm_gate_config: RescuePermGateConfig,
+    pub rescue_perm_gate_config: RescuePermGateConfig,
 }
 
 /// Rescue CRHF Gate. It consists of a RescueCrhfGate and depends on rescue parameters which in turn

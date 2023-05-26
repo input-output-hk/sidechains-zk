@@ -58,11 +58,11 @@
 
 use halo2_proofs::circuit::AssignedCell;
 
-mod ecc;
-mod instructions;
-mod main_gate;
-mod prover;
-mod rescue;
+pub mod ecc;
+pub mod instructions;
+pub mod main_gate;
+pub mod prover;
+pub mod rescue;
 
 mod c_api;
 pub mod proof;
