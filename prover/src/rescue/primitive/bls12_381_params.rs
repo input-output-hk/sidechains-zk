@@ -9,7 +9,7 @@ use halo2curves::bls12_381::Scalar;
 use super::rescue_parameters::*;
 
 /// Structure to implement Rescue parameters
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct RescueParametersBls;
 
 impl RescueParameters<Scalar> for RescueParametersBls {

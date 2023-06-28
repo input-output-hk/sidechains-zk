@@ -226,7 +226,7 @@ pub trait EccInstructions<C: CurveAffine>: Chip<C::Base> + Clone + Debug {
 
 /// Structure representing a `Scalar` used in variable-base multiplication.
 #[derive(Clone, Debug)]
-pub struct ScalarVar(AssignedValue<Base>);
+pub struct ScalarVar(pub(crate) AssignedValue<Base>);
 
 impl EccInstructions<AffinePoint> for EccChip {
     type ScalarVar = ScalarVar;
