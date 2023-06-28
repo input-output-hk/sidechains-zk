@@ -12,6 +12,9 @@ use halo2_proofs::circuit::{Chip, Value};
 use halo2_proofs::plonk::{ConstraintSystem, Error};
 use halo2curves::jubjub::{AffinePoint, Base, ExtendedPoint, SubgroupPoint};
 
+/// Type of a Schnorr Signature
+pub type AssignedSchnorrSignature = (AssignedEccPoint, ScalarVar);
+
 /// Configuration for SchnorrVerifierGate
 #[derive(Clone, Debug)]
 pub struct SchnorrVerifierConfig {
@@ -19,11 +22,11 @@ pub struct SchnorrVerifierConfig {
     ecc_config: EccConfig,
 }
 
-/// Schnorr verifier Gate. If consists of a rescue hash chip and ecc chip.
+/// Schnorr verifier Gate. It consists of a rescue hash chip and ecc chip.
 #[derive(Clone, Debug)]
 pub struct SchnorrVerifierGate {
     rescue_hash_gate: RescueCrhfGate<Base, RescueParametersBls>,
-    ecc_gate: EccChip,
+    pub(crate) ecc_gate: EccChip,
     config: SchnorrVerifierConfig,
 }
 
@@ -49,7 +52,7 @@ impl SchnorrVerifierGate {
     pub fn verify(
         &self,
         ctx: &mut RegionCtx<'_, Base>,
-        signature: &(AssignedEccPoint, ScalarVar),
+        signature: &AssignedSchnorrSignature,
         pk: &AssignedEccPoint,
         msg: &AssignedValue<Base>,
     ) -> Result<(), Error> {

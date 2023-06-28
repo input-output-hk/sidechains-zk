@@ -63,7 +63,7 @@ pub mod instructions;
 pub mod main_gate;
 pub mod prover;
 pub mod rescue;
-pub mod schnorr;
+pub mod signatures;
 
 mod c_api;
 pub mod proof;
