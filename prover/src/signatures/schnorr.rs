@@ -10,16 +10,19 @@ use group::prime::PrimeCurveAffine;
 use group::Group;
 use halo2_proofs::circuit::{Chip, Value};
 use halo2_proofs::plonk::{ConstraintSystem, Error};
-use halo2curves::jubjub::{AffinePoint, Base, ExtendedPoint, SubgroupPoint};
+use halo2curves::jubjub::{AffinePoint, Base, ExtendedPoint, Scalar, SubgroupPoint};
+
+/// Type of an Assigned Schnorr Signature
+pub type AssignedSchnorrSignature = (AssignedEccPoint, ScalarVar);
 
 /// Type of a Schnorr Signature
-pub type AssignedSchnorrSignature = (AssignedEccPoint, ScalarVar);
+pub type SchnorrSig = (AffinePoint, Scalar);
 
 /// Configuration for SchnorrVerifierGate
 #[derive(Clone, Debug)]
 pub struct SchnorrVerifierConfig {
     rescue_hash_config: RescueCrhfGateConfig,
-    ecc_config: EccConfig,
+    pub(crate) ecc_config: EccConfig,
 }
 
 /// Schnorr verifier Gate. It consists of a rescue hash chip and ecc chip.
@@ -69,6 +72,27 @@ impl SchnorrVerifierGate {
         self.ecc_gate.constrain_equal(ctx, &lhs, &rhs)?;
 
         Ok(())
+    }
+
+    /// Assign a schnorr signature
+    pub fn assign_sig(
+        &self,
+        ctx: &mut RegionCtx<'_, Base>,
+        signature: &Value<SchnorrSig>,
+    ) -> Result<AssignedSchnorrSignature, Error> {
+        let a = signature.map(|value| {
+            value.0
+        });
+        let e = signature.map(|value| {
+            value.1
+        });
+
+        let assigned_sig_scalar =
+            self.ecc_gate.witness_scalar_var(ctx, &e)?;
+        let assigned_sig_point =
+            self.ecc_gate.witness_point(ctx, &a)?;
+
+        Ok((assigned_sig_point, assigned_sig_scalar))
     }
 }
 
@@ -143,19 +167,20 @@ mod tests {
                 |region| {
                     let offset = 0;
                     let mut ctx = RegionCtx::new(region, offset);
-                    let assigned_sig_scalar =
-                        ecc_gate.witness_scalar_var(&mut ctx, &Value::known(self.signature.1))?;
+                    let assigned_sig = schnorr_gate
+                        .assign_sig(
+                            &mut ctx,
+                            &Value::known(self.signature)
+                        )?;
                     let assigned_msg = schnorr_gate
                         .ecc_gate
                         .main_gate
                         .assign_value(&mut ctx, Value::known(self.msg))?;
-                    let assigned_sig_point =
-                        ecc_gate.witness_point(&mut ctx, &Value::known(self.signature.0))?;
                     let assigned_pk = ecc_gate.witness_point(&mut ctx, &Value::known(self.pk))?;
 
                     schnorr_gate.verify(
                         &mut ctx,
-                        &(assigned_sig_point, assigned_sig_scalar),
+                        &assigned_sig,
                         &assigned_pk,
                         &assigned_msg,
                     )?;
