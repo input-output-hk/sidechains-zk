@@ -249,7 +249,7 @@ mod tests {
         let pi = vec![vec![], vec![pk.get_u(), pk.get_v(), msg]];
 
         let prover =
-            MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
+            MockProver::run(K, &circuit, pi).expect("Failed to run Schnorr verifier mock prover");
 
         assert!(prover.verify().is_ok());
 

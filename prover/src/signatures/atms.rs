@@ -61,7 +61,7 @@ impl AtmsVerifierGate {
         ctx: &mut RegionCtx<'_, Base>,
         signatures: &[Option<AssignedSchnorrSignature>],
         pks: &[AssignedEccPoint],
-        commited_pks: AssignedValue<Base>,
+        commited_pks: &AssignedValue<Base>,
         msg: &AssignedValue<Base>,
         threshold: &AssignedValue<Base>,
     ) -> Result<(), Error> {
@@ -73,7 +73,7 @@ impl AtmsVerifierGate {
 
         let hashed_pks = self.rescue_hash_gate.hash(ctx, &flattened_pks)?;
 
-        self.schnorr_gate.ecc_gate.main_gate.assert_equal(ctx, &hashed_pks, &commited_pks)?;
+        self.schnorr_gate.ecc_gate.main_gate.assert_equal(ctx, &hashed_pks, commited_pks)?;
 
         let mut counter = self.schnorr_gate.ecc_gate.main_gate.assign_constant(ctx, Base::ZERO)?;
 
@@ -103,4 +103,174 @@ impl Chip<Base> for AtmsVerifierGate {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use std::ops::Mul;
+    use group::{Curve, Group};
+    use halo2_proofs::circuit::{Layouter, SimpleFloorPlanner};
+    use halo2_proofs::dev::MockProver;
+    use halo2_proofs::plonk::Circuit;
+    use halo2curves::jubjub::{AffinePoint, ExtendedPoint, Scalar, SubgroupPoint};
+    use rand::prelude::IteratorRandom;
+    use rand_chacha::ChaCha8Rng;
+    use rand_core::SeedableRng;
+    use crate::rescue::RescueSponge;
+    use crate::signatures::primitive::schnorr::Schnorr;
+    use crate::signatures::schnorr::SchnorrSig;
+    use super::*;
 
+    #[derive(Clone)]
+    struct TestCircuitConfig {
+        atms_config: AtmsVerifierConfig,
+    }
+
+    #[derive(Default)]
+    struct TestCircuitAtmsSignature {
+        signatures: Vec<Option<SchnorrSig>>,
+        pks: Vec<AffinePoint>,
+        pks_comm: Base,
+        msg: Base,
+        threshold: Base,
+    }
+
+    impl Circuit<Base> for TestCircuitAtmsSignature {
+        type Config = TestCircuitConfig;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            Self::default()
+        }
+
+        fn configure(meta: &mut ConstraintSystem<Base>) -> Self::Config {
+            let atms_config = AtmsVerifierGate::configure(meta);
+            TestCircuitConfig { atms_config }
+        }
+
+        fn synthesize(&self, config: Self::Config, mut layouter: impl Layouter<Base>) -> Result<(), Error> {
+            let atms_gate = AtmsVerifierGate::new(config.atms_config.clone());
+            let ecc_gate = EccChip::new(config.atms_config.schnorr_config.ecc_config.clone());
+
+            let pi_values = layouter.assign_region(
+                || "ATMS verifier test",
+                |region| {
+                    let offset = 0;
+                    let mut ctx = RegionCtx::new(region, offset);
+                    let assigned_sigs = self.signatures
+                        .iter()
+                        .map(|&signature| {
+                            if let Some(sig) = signature {
+                                Some(atms_gate.schnorr_gate.assign_sig(&mut ctx, &Value::known(sig)).ok()?)
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>();
+                    let assigned_pks = self.pks
+                        .iter()
+                        .map(|&pk| {
+                            ecc_gate.witness_point(&mut ctx, &Value::known(pk))
+                        })
+                        .collect::<Result<Vec<_>, Error>>()?;
+
+                    // We assign cells to be compared against the PI
+                    let pi_cells = ecc_gate
+                        .main_gate
+                        .assign_values_slice(&mut ctx, &[Value::known(self.pks_comm), Value::known(self.msg), Value::known(self.threshold)])?;
+
+                    atms_gate.verify(&mut ctx, &assigned_sigs, &assigned_pks, &pi_cells[0], &pi_cells[1], &pi_cells[2])?;
+
+                    Ok(pi_cells)
+                }
+            )?;
+
+            layouter.constrain_instance(
+                pi_values[0].cell(),
+                config
+                    .atms_config
+                    .schnorr_config
+                    .ecc_config
+                    .maingate_config
+                    .instance
+                    .clone(),
+                0,
+            )?;
+
+            layouter.constrain_instance(
+                pi_values[1].cell(),
+                config
+                    .atms_config
+                    .schnorr_config
+                    .ecc_config
+                    .maingate_config
+                    .instance
+                    .clone(),
+                1,
+            )?;
+
+            layouter.constrain_instance(
+                pi_values[2].cell(),
+                config
+                    .atms_config
+                    .schnorr_config
+                    .ecc_config
+                    .maingate_config
+                    .instance
+                    .clone(),
+                2,
+            )?;
+
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn atms_signature() {
+        const K: u32 = 16;
+        const NUM_PARTIES: usize = 9; // todo: multiple of three so Rescue does not complain. We should do some padding
+        const THRESHOLD: usize = 6;
+
+        let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
+        let generator = ExtendedPoint::from(SubgroupPoint::generator());
+        let msg = Base::random(&mut rng);
+
+        let keypairs = (0..NUM_PARTIES)
+            .map(|_| Schnorr::keygen(&mut rng))
+            .collect::<Vec<_>>();
+
+        let pks = keypairs.iter().map(|(_, pk)| *pk).collect::<Vec<_>>();
+
+        let mut flattened_pks = Vec::with_capacity(keypairs.len() * 2);
+        for (_, pk) in &keypairs {
+            flattened_pks.push(pk.get_u());
+            flattened_pks.push(pk.get_v());
+        }
+
+       let pks_comm = RescueSponge::<Base, RescueParametersBls>::hash(&flattened_pks, None);
+
+        let signing_parties = (0..NUM_PARTIES).choose_multiple(&mut rng, THRESHOLD);
+        let signatures = (0..NUM_PARTIES)
+            .map(|index| {
+                if signing_parties.contains(&index) {
+                    Some(Schnorr::sign(keypairs[index], msg, &mut rng))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let circuit = TestCircuitAtmsSignature {
+            signatures,
+            pks,
+            pks_comm,
+            msg,
+            threshold: Base::from(THRESHOLD as u64)
+        };
+
+        let pi = vec![vec![pks_comm, msg, Base::from(THRESHOLD as u64)], vec![pks_comm, msg, Base::from(THRESHOLD as u64)], vec![pks_comm, msg, Base::from(THRESHOLD as u64)]];
+
+        let prover = MockProver::run(K, &circuit, pi).expect("Failed to run ATMS verifier");
+
+        prover.verify().unwrap();
+        assert!(prover.verify().is_ok());
+    }
+}
