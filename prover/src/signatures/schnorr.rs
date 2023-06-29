@@ -124,6 +124,7 @@ mod tests {
     use rand_chacha::ChaCha8Rng;
     use rand_core::SeedableRng;
     use std::ops::Mul;
+    use crate::signatures::primitive::schnorr::Schnorr;
 
     #[derive(Clone)]
     struct TestCircuitConfig {
@@ -234,31 +235,13 @@ mod tests {
         const K: u32 = 16;
 
         let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
-        let sk = Scalar::random(&mut rng);
-        let generator = ExtendedPoint::from(SubgroupPoint::generator());
-        let pk = generator.mul(sk).to_affine();
+        let (sk, pk) = Schnorr::keygen(&mut rng);
         let msg = Base::random(&mut rng);
 
-        let k = Scalar::random(&mut rng);
-        let announcement = generator.mul(k).to_affine();
-
-        let input_hash = [
-            *announcement.coordinates().unwrap().x(),
-            *pk.coordinates().unwrap().x(),
-            msg.clone(),
-        ];
-
-        let challenge = RescueSponge::<Base, RescueParametersBls>::hash(&input_hash, None);
-
-        // we need to have some wide bytes to reduce the challenge.
-        let mut wide_bytes = [0u8; 64];
-        wide_bytes[..32].copy_from_slice(&challenge.to_bytes());
-        let reduced_challenge = Scalar::from_bytes_wide(&wide_bytes);
-
-        let response = k + reduced_challenge * sk;
+        let signature = Schnorr::sign((sk, pk), msg, &mut rng);
 
         let circuit = TestCircuitSignature {
-            signature: (announcement, response),
+            signature,
             pk,
             msg,
         };
