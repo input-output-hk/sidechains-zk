@@ -1,27 +1,29 @@
 //! We implement a gate that verifies the validity of an ATMS signature given the threshold
 //! and public key commitment as Public Inputs.
 
+use crate::ecc::chip::{AssignedEccPoint, EccChip, EccConfig, EccInstructions};
+use crate::instructions::MainGateInstructions;
+use crate::rescue::{
+    RescueCrhfGate, RescueCrhfGateConfig, RescueCrhfInstructions, RescueParametersBls,
+};
+use crate::signatures::schnorr::{
+    AssignedSchnorrSignature, SchnorrVerifierConfig, SchnorrVerifierGate,
+};
+use crate::util::RegionCtx;
+use crate::AssignedValue;
 use ff::Field;
 use halo2_proofs::circuit::{Chip, Value};
 use halo2_proofs::plonk::{ConstraintSystem, Error};
 use halo2curves::jubjub::Base;
-use crate::AssignedValue;
-use crate::ecc::chip::{AssignedEccPoint, EccChip, EccConfig, EccInstructions};
-use crate::instructions::MainGateInstructions;
-use crate::rescue::{RescueCrhfGate, RescueCrhfGateConfig, RescueCrhfInstructions, RescueParametersBls};
-use crate::signatures::schnorr::{AssignedSchnorrSignature, SchnorrVerifierConfig, SchnorrVerifierGate};
-use crate::util::RegionCtx;
 
 #[derive(Clone, Debug)]
 pub struct AtmsVerifierConfig {
-    rescue_hash_config: RescueCrhfGateConfig,
     schnorr_config: SchnorrVerifierConfig,
 }
 
 #[derive(Clone, Debug)]
 /// ATMS verifier gate. It consists of a rescue hash chip and a schnorr chip
 pub struct AtmsVerifierGate {
-    rescue_hash_gate: RescueCrhfGate<Base, RescueParametersBls>,
     schnorr_gate: SchnorrVerifierGate,
     config: AtmsVerifierConfig,
 }
@@ -30,16 +32,14 @@ impl AtmsVerifierGate {
     /// Initialise the gate
     pub fn new(config: AtmsVerifierConfig) -> Self {
         Self {
-            rescue_hash_gate: RescueCrhfGate::new(config.clone().rescue_hash_config),
             schnorr_gate: SchnorrVerifierGate::new(config.clone().schnorr_config),
-            config
+            config,
         }
     }
 
     /// Configure the ATMS gate
     pub fn configure(meta: &mut ConstraintSystem<Base>) -> AtmsVerifierConfig {
         AtmsVerifierConfig {
-            rescue_hash_config: RescueCrhfGate::<Base, RescueParametersBls>::configure(meta),
             schnorr_config: SchnorrVerifierGate::configure(meta),
         }
     }
@@ -68,23 +68,39 @@ impl AtmsVerifierGate {
         let mut flattened_pks = Vec::new();
         for pk in pks {
             flattened_pks.push(pk.x.clone());
-            flattened_pks.push(pk.y.clone());
         }
 
-        let hashed_pks = self.rescue_hash_gate.hash(ctx, &flattened_pks)?;
+        let hashed_pks = self
+            .schnorr_gate
+            .rescue_hash_gate
+            .hash(ctx, &flattened_pks)?;
 
-        self.schnorr_gate.ecc_gate.main_gate.assert_equal(ctx, &hashed_pks, commited_pks)?;
+        self.schnorr_gate
+            .ecc_gate
+            .main_gate
+            .assert_equal(ctx, &hashed_pks, commited_pks)?;
 
-        let mut counter = self.schnorr_gate.ecc_gate.main_gate.assign_constant(ctx, Base::ZERO)?;
+        let mut counter = self
+            .schnorr_gate
+            .ecc_gate
+            .main_gate
+            .assign_constant(ctx, Base::ZERO)?;
 
-        for (sig, pk) in signatures.into_iter().zip(pks.into_iter()) {
+        for (sig, pk) in signatures.iter().zip(pks.iter()) {
             if let Some(signature) = sig {
                 self.schnorr_gate.verify(ctx, signature, pk, msg)?;
-                counter = self.schnorr_gate.ecc_gate.main_gate.add_constant(ctx, &counter, Base::one())?;
+                counter = self.schnorr_gate.ecc_gate.main_gate.add_constant(
+                    ctx,
+                    &counter,
+                    Base::one(),
+                )?;
             }
         }
 
-        self.schnorr_gate.ecc_gate.main_gate.assert_equal(ctx, &counter, threshold)?;
+        self.schnorr_gate
+            .ecc_gate
+            .main_gate
+            .assert_equal(ctx, &counter, threshold)?;
 
         Ok(())
     }
@@ -105,19 +121,29 @@ impl Chip<Base> for AtmsVerifierGate {
 
 #[cfg(test)]
 mod tests {
-    use std::ops::Mul;
+    use super::*;
+    use crate::rescue::RescueSponge;
+    use crate::signatures::primitive::schnorr::Schnorr;
+    use crate::signatures::schnorr::SchnorrSig;
     use group::{Curve, Group};
     use halo2_proofs::circuit::{Layouter, SimpleFloorPlanner};
     use halo2_proofs::dev::MockProver;
-    use halo2_proofs::plonk::Circuit;
+    use halo2_proofs::plonk::{create_proof, keygen_pk, keygen_vk, verify_proof, Circuit};
+    use halo2_proofs::poly::commitment::Prover;
+    use halo2_proofs::poly::kzg::commitment::{KZGCommitmentScheme, ParamsKZG};
+    use halo2_proofs::poly::kzg::multiopen::{ProverGWC, VerifierGWC};
+    use halo2_proofs::poly::kzg::strategy::AccumulatorStrategy;
+    use halo2_proofs::poly::VerificationStrategy;
+    use halo2_proofs::transcript::{
+        Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
+    };
+    use halo2curves::bls12_381::Bls12;
     use halo2curves::jubjub::{AffinePoint, ExtendedPoint, Scalar, SubgroupPoint};
     use rand::prelude::IteratorRandom;
     use rand_chacha::ChaCha8Rng;
     use rand_core::SeedableRng;
-    use crate::rescue::RescueSponge;
-    use crate::signatures::primitive::schnorr::Schnorr;
-    use crate::signatures::schnorr::SchnorrSig;
-    use super::*;
+    use std::ops::Mul;
+    use std::time::Instant;
 
     #[derive(Clone)]
     struct TestCircuitConfig {
@@ -146,78 +172,79 @@ mod tests {
             TestCircuitConfig { atms_config }
         }
 
-        fn synthesize(&self, config: Self::Config, mut layouter: impl Layouter<Base>) -> Result<(), Error> {
-            let atms_gate = AtmsVerifierGate::new(config.atms_config.clone());
-            let ecc_gate = EccChip::new(config.atms_config.schnorr_config.ecc_config.clone());
+        fn synthesize(
+            &self,
+            config: Self::Config,
+            mut layouter: impl Layouter<Base>,
+        ) -> Result<(), Error> {
+            let atms_gate = AtmsVerifierGate::new(config.atms_config);
 
             let pi_values = layouter.assign_region(
                 || "ATMS verifier test",
                 |region| {
                     let offset = 0;
                     let mut ctx = RegionCtx::new(region, offset);
-                    let assigned_sigs = self.signatures
+                    let assigned_sigs = self
+                        .signatures
                         .iter()
                         .map(|&signature| {
                             if let Some(sig) = signature {
-                                Some(atms_gate.schnorr_gate.assign_sig(&mut ctx, &Value::known(sig)).ok()?)
+                                Some(
+                                    atms_gate
+                                        .schnorr_gate
+                                        .assign_sig(&mut ctx, &Value::known(sig))
+                                        .ok()?,
+                                )
                             } else {
                                 None
                             }
                         })
                         .collect::<Vec<_>>();
-                    let assigned_pks = self.pks
+                    let assigned_pks = self
+                        .pks
                         .iter()
                         .map(|&pk| {
-                            ecc_gate.witness_point(&mut ctx, &Value::known(pk))
+                            atms_gate
+                                .schnorr_gate
+                                .ecc_gate
+                                .witness_point(&mut ctx, &Value::known(pk))
                         })
                         .collect::<Result<Vec<_>, Error>>()?;
 
                     // We assign cells to be compared against the PI
-                    let pi_cells = ecc_gate
+                    let pi_cells = atms_gate
+                        .schnorr_gate
+                        .ecc_gate
                         .main_gate
-                        .assign_values_slice(&mut ctx, &[Value::known(self.pks_comm), Value::known(self.msg), Value::known(self.threshold)])?;
+                        .assign_values_slice(
+                            &mut ctx,
+                            &[
+                                Value::known(self.pks_comm),
+                                Value::known(self.msg),
+                                Value::known(self.threshold),
+                            ],
+                        )?;
 
-                    atms_gate.verify(&mut ctx, &assigned_sigs, &assigned_pks, &pi_cells[0], &pi_cells[1], &pi_cells[2])?;
+                    atms_gate.verify(
+                        &mut ctx,
+                        &assigned_sigs,
+                        &assigned_pks,
+                        &pi_cells[0],
+                        &pi_cells[1],
+                        &pi_cells[2],
+                    )?;
 
                     Ok(pi_cells)
-                }
+                },
             )?;
 
-            layouter.constrain_instance(
-                pi_values[0].cell(),
-                config
-                    .atms_config
-                    .schnorr_config
-                    .ecc_config
-                    .maingate_config
-                    .instance
-                    .clone(),
-                0,
-            )?;
+            let ecc_gate = atms_gate.schnorr_gate.ecc_gate;
 
-            layouter.constrain_instance(
-                pi_values[1].cell(),
-                config
-                    .atms_config
-                    .schnorr_config
-                    .ecc_config
-                    .maingate_config
-                    .instance
-                    .clone(),
-                1,
-            )?;
+            layouter.constrain_instance(pi_values[0].cell(), ecc_gate.instance_col(), 0)?;
 
-            layouter.constrain_instance(
-                pi_values[2].cell(),
-                config
-                    .atms_config
-                    .schnorr_config
-                    .ecc_config
-                    .maingate_config
-                    .instance
-                    .clone(),
-                2,
-            )?;
+            layouter.constrain_instance(pi_values[1].cell(), ecc_gate.instance_col(), 1)?;
+
+            layouter.constrain_instance(pi_values[2].cell(), ecc_gate.instance_col(), 2)?;
 
             Ok(())
         }
@@ -225,9 +252,13 @@ mod tests {
 
     #[test]
     fn atms_signature() {
+        // const K: u32 = 21;
+        // const NUM_PARTIES: usize = 735; // todo: multiple of three so Rescue does not complain. We should do some padding
+        // const THRESHOLD: usize = 492;
+
         const K: u32 = 16;
-        const NUM_PARTIES: usize = 9; // todo: multiple of three so Rescue does not complain. We should do some padding
-        const THRESHOLD: usize = 6;
+        const NUM_PARTIES: usize = 21; // todo: multiple of three so Rescue does not complain. We should do some padding
+        const THRESHOLD: usize = 14;
 
         let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
         let generator = ExtendedPoint::from(SubgroupPoint::generator());
@@ -242,10 +273,9 @@ mod tests {
         let mut flattened_pks = Vec::with_capacity(keypairs.len() * 2);
         for (_, pk) in &keypairs {
             flattened_pks.push(pk.get_u());
-            flattened_pks.push(pk.get_v());
         }
 
-       let pks_comm = RescueSponge::<Base, RescueParametersBls>::hash(&flattened_pks, None);
+        let pks_comm = RescueSponge::<Base, RescueParametersBls>::hash(&flattened_pks, None);
 
         let signing_parties = (0..NUM_PARTIES).choose_multiple(&mut rng, THRESHOLD);
         let signatures = (0..NUM_PARTIES)
@@ -263,14 +293,52 @@ mod tests {
             pks,
             pks_comm,
             msg,
-            threshold: Base::from(THRESHOLD as u64)
+            threshold: Base::from(THRESHOLD as u64),
         };
 
-        let pi = vec![vec![pks_comm, msg, Base::from(THRESHOLD as u64)], vec![pks_comm, msg, Base::from(THRESHOLD as u64)], vec![pks_comm, msg, Base::from(THRESHOLD as u64)]];
+        let pi = vec![vec![pks_comm, msg, Base::from(THRESHOLD as u64)]];
 
-        let prover = MockProver::run(K, &circuit, pi).expect("Failed to run ATMS verifier");
+        let prover =
+            MockProver::run(K, &circuit, pi).expect("Failed to run ATMS verifier mock prover");
 
         prover.verify().unwrap();
         assert!(prover.verify().is_ok());
+
+        let kzg_params = ParamsKZG::<Bls12>::setup(K, &mut rng);
+        let vk = keygen_vk(&kzg_params, &circuit).unwrap();
+        let pk = keygen_pk(&kzg_params, vk, &circuit).unwrap();
+
+        let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
+        create_proof::<KZGCommitmentScheme<_>, ProverGWC<_>, _, _, _, _>(
+            &kzg_params,
+            &pk,
+            &[circuit],
+            &[],
+            &mut rng,
+            &mut transcript,
+        )
+        .expect("proof generation should not fail");
+
+        let proof: Vec<u8> = transcript.finalize();
+
+        let strategy = AccumulatorStrategy::new(&kzg_params);
+        let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
+        println!("Before verification: {:?}", Instant::now());
+        let strategy = verify_proof::<KZGCommitmentScheme<_>, VerifierGWC<_>, _, _, _>(
+            &kzg_params,
+            pk.get_vk(),
+            strategy,
+            &[],
+            &mut transcript,
+        )
+        .unwrap();
+        assert!(
+            (<AccumulatorStrategy<'_, Bls12> as VerificationStrategy<
+                '_,
+                KZGCommitmentScheme<Bls12>,
+                VerifierGWC<_>,
+            >>::finalize(strategy))
+        );
+        println!("After verification: {:?}", Instant::now())
     }
 }

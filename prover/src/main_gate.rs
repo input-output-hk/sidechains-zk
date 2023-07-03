@@ -122,7 +122,7 @@ impl MainGateConfig {
 /// MainGate implements instructions with [`MainGateConfig`]
 #[derive(Clone, Debug)]
 pub struct MainGate<F: PrimeField> {
-    config: MainGateConfig,
+    pub(crate) config: MainGateConfig,
     _marker: PhantomData<F>,
 }
 
@@ -571,7 +571,7 @@ impl<F: PrimeField> MainGate<F> {
     /// Main Gate
     pub fn new(config: MainGateConfig) -> Self {
         MainGate {
-            config: config.clone(),
+            config,
             _marker: PhantomData::default(),
         }
     }
@@ -637,7 +637,7 @@ impl<F: PrimeField> MainGate<F> {
             let q_h4 = meta.query_fixed(q_h4, Rotation::cur());
 
             let pow_5 = |val: Expression<F>| -> Expression<F> {
-                val.clone() * val.clone() * val.clone() * val.clone() * val.clone()
+                val.clone() * val.clone() * val.clone() * val.clone() * val
             };
 
             vec![

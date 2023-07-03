@@ -1,5 +1,6 @@
 //! Proof wrapper. API for higher level abstraction.
 
+use std::fmt::Error;
 use bls12_381::Scalar as BlsScalar;
 use jubjub::{Scalar, SubgroupPoint};
 
@@ -21,12 +22,12 @@ pub type PlonkProof = ();
 /// Create a proof for a SNARK-based ATMS. Given a list of public keys and valid associated signatures,
 /// together with an aggregate verification key, the function returns a proof that guarantees that there
 /// exists at least `threshold` valid signatures for public keys committed under `avk`
-pub fn prove(pks: &[EdDsaPk], sigs: &[EdDsaSig], _avk: &MtCommitment) -> Result<PlonkProof, ()> {
+pub fn prove(pks: &[EdDsaPk], sigs: &[EdDsaSig], _avk: &MtCommitment) -> Result<PlonkProof, Error> {
     if pks.len() == sigs.len() {
         return Ok(());
     }
 
-    Err(())
+    Err(Error::default())
 }
 
 #[cfg(test)]

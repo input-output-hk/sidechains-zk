@@ -11,13 +11,13 @@ use halo2_proofs::{
 use halo2curves::CurveAffine;
 
 use group::{Curve, Group};
+use halo2_proofs::plonk::Instance;
 use halo2curves::jubjub::{AffinePoint, Base, Scalar};
 use std::convert::TryInto;
 use std::fmt::Debug;
 
 pub(super) mod add;
 pub mod constants;
-// pub(super) mod mul_bin;
 pub(super) mod witness_point;
 
 use crate::ecc::chip::add::AddConfig;
@@ -67,13 +67,13 @@ impl AssignedEccPoint {
     /// The cell containing the affine x-coordinate,
     /// or 0 for the zero point.
     pub fn x(&self) -> AssignedValue<Base> {
-        self.x.clone().into()
+        self.x.clone()
     }
 
     /// The cell containing the affine y-coordinate,
     /// or 0 for the zero point.
     pub fn y(&self) -> AssignedValue<Base> {
-        self.y.clone().into()
+        self.y.clone()
     }
 
     #[cfg(test)]
@@ -86,7 +86,6 @@ impl AssignedEccPoint {
 #[derive(Clone, Debug)]
 #[allow(non_snake_case)]
 pub struct EccConfig {
-    pub maingate_config: MainGateConfig,
     /// Advice columns needed
     x_p: Column<Advice>,
     y_p: Column<Advice>,
@@ -99,8 +98,6 @@ pub struct EccConfig {
     /// Addition
     add: AddConfig,
 
-    // /// Variable-base scalar multiplication
-    // mul: mul::Config,
     /// Witness point
     witness_point: witness_point::Config,
 }
@@ -114,24 +111,25 @@ pub struct EccChip {
 
 impl EccChip {
     /// Given config creates new chip that implements ranging
-    pub fn new(config: EccConfig) -> Self {
-        Self {
-            main_gate: MainGate::new(config.clone().maingate_config),
-            config,
-        }
+    pub fn new(main_gate: MainGate<Base>, config: EccConfig) -> Self {
+        Self { main_gate, config }
     }
 
     /// Configures lookup and returns the resulting config
-    pub fn configure(meta: &mut ConstraintSystem<Base>) -> EccConfig {
+    pub fn configure(
+        meta: &mut ConstraintSystem<Base>,
+        maingate_config: MainGateConfig,
+    ) -> EccConfig {
         let q_add = meta.complex_selector();
 
-        let x_p = meta.advice_column();
-        let y_p = meta.advice_column();
+        // we reuse maingate's columns We just need two extra columns
+        let x_p = maingate_config.a;
+        let y_p = maingate_config.b;
 
-        let x_qr = meta.advice_column();
-        let y_qr = meta.advice_column();
+        let x_qr = maingate_config.c;
+        let y_qr = maingate_config.d;
 
-        let alpha = meta.advice_column();
+        let alpha = maingate_config.e;
         let beta = meta.advice_column();
 
         let scalar_mul = meta.advice_column();
@@ -142,7 +140,6 @@ impl EccChip {
         let witness_config = witness_point::Config::configure(meta, x_p, y_p);
 
         EccConfig {
-            maingate_config: MainGate::configure(meta).config().clone(),
             x_p,
             y_p,
             x_qr,
@@ -274,7 +271,7 @@ impl EccInstructions<AffinePoint> for EccChip {
     ) -> Result<Self::Point, Error> {
         let config = self.config().add;
 
-        config.assign_region(ctx, &a, &b)
+        config.assign_region(ctx, a, b)
     }
 
     fn mul(
@@ -297,6 +294,8 @@ impl EccInstructions<AffinePoint> for EccChip {
 
         let assigned_0y =
             ctx.assign_advice(|| "y of zero", self.config.y_qr, Value::known(Base::ONE))?;
+
+        ctx.next();
 
         let assigned_0 = AssignedEccPoint {
             x: assigned_0x.clone(),
@@ -340,9 +339,17 @@ impl EccInstructions<AffinePoint> for EccChip {
     }
 }
 
+impl EccChip {
+    /// Get the instance column
+    pub fn instance_col(&self) -> Column<Instance> {
+        self.main_gate.config.instance
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::ecc::chip::{EccChip, EccConfig, EccInstructions};
+    use crate::main_gate::{MainGate, MainGateConfig};
     use crate::util::RegionCtx;
     use ff::Field;
     use group::{Curve, Group};
@@ -357,6 +364,7 @@ mod tests {
 
     #[derive(Clone)]
     struct TestCircuitConfig {
+        maingate_config: MainGateConfig,
         ecc_config: EccConfig,
     }
 
@@ -375,10 +383,14 @@ mod tests {
         }
 
         fn configure(meta: &mut ConstraintSystem<Base>) -> Self::Config {
-            let ecc_config = EccChip::configure(meta);
+            let maingate = MainGate::configure(meta);
+            let ecc_config = EccChip::configure(meta, maingate.config.clone());
             // todo: do we need to enable equality?
 
-            Self::Config { ecc_config }
+            Self::Config {
+                maingate_config: maingate.config,
+                ecc_config,
+            }
         }
 
         fn synthesize(
@@ -386,7 +398,8 @@ mod tests {
             config: Self::Config,
             mut layouter: impl Layouter<Base>,
         ) -> Result<(), Error> {
-            let ecc_chip = EccChip::new(config.ecc_config.clone());
+            let main_gate = MainGate::new(config.maingate_config);
+            let ecc_chip = EccChip::new(main_gate, config.ecc_config);
 
             let assigned_val = layouter.assign_region(
                 || "Ecc mult test",
@@ -404,12 +417,12 @@ mod tests {
 
             layouter.constrain_instance(
                 assigned_val.x.cell(),
-                config.ecc_config.maingate_config.instance.clone(),
+                ecc_chip.main_gate.config.instance,
                 0,
             )?;
             layouter.constrain_instance(
                 assigned_val.y.cell(),
-                config.ecc_config.maingate_config.instance.clone(),
+                ecc_chip.main_gate.config.instance,
                 1,
             )?;
 

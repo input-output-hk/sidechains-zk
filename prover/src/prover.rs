@@ -12,5 +12,5 @@ fn kzg_backend() {
 
     let params = ParamsKZG::<Bls12>::setup(K, OsRng);
 
-    assert!(true);
+    // assert!(true);
 }

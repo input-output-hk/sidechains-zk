@@ -132,29 +132,29 @@ impl AddConfig {
             // y_p * y_q
             let y_p_times_y_q = y_p.clone() * y_q.clone();
             // x_p * y_q
-            let x_p_times_y_q = x_p.clone() * y_q.clone();
+            let x_p_times_y_q = x_p * y_q;
             // x_q * y_p
-            let x_q_times_y_p = x_q.clone() * y_p.clone();
+            let x_q_times_y_p = x_q * y_p;
             // (d x_p x_qr y_p y_qr)
             let d_x_p_x_q_y_p_y_q =
-                edwards_d.clone() * x_p_times_x_q.clone() * y_p_times_y_q.clone();
+                edwards_d * x_p_times_x_q.clone() * y_p_times_y_q.clone();
 
             // x_r * (1 + d * x_p * x_q * y_p * y_q) - x_p * y_q + x_q * y_p = 0
             let poly1 = {
                 let one_plus = one.clone() + d_x_p_x_q_y_p_y_q.clone(); // (1 + d * x_p * x_q * y_p * y_q)
-                let nominator = x_p_times_y_q.clone() + x_q_times_y_p.clone(); // (x_p * y_q + x_q * y_p)
+                let nominator = x_p_times_y_q + x_q_times_y_p; // (x_p * y_q + x_q * y_p)
 
                 // q_add * (x_r * (1 + d * x_p * x_q * y_p * y_q) - x_p * y_q + x_q * y_p)
-                x_r.clone() * one_plus - nominator
+                x_r * one_plus - nominator
             };
 
             // y_r * (1 - d * x_p * x_q * y_p * y_q) - y_p * y_q + x_p * x_q = 0
             let poly2 = {
-                let one_minus = one.clone() - d_x_p_x_q_y_p_y_q.clone(); // (1 + d * x_p * x_q * y_p * y_q)
-                let nominator = y_p_times_y_q.clone() + x_p_times_x_q.clone(); // (y_p * y_q + x_p * x_q)
+                let one_minus = one - d_x_p_x_q_y_p_y_q; // (1 + d * x_p * x_q * y_p * y_q)
+                let nominator = y_p_times_y_q + x_p_times_x_q; // (y_p * y_q + x_p * x_q)
 
                 // q_add * (x_r * (1 + d * x_p * x_q * y_p * y_q) - x_p * y_q + x_q * y_p)
-                y_r.clone() * one_minus - nominator
+                y_r * one_minus - nominator
             };
 
             Constraints::with_selector(
@@ -199,18 +199,18 @@ impl AddConfig {
                 {
                     // λ = (d * x_p * x_q * y_p * y_q)
                     let lambda = Assigned::from(EDWARDS_D)
-                        * x_p.clone()
-                        * x_q.clone()
-                        * y_p.clone()
-                        * y_q.clone();
+                        * *x_p
+                        * *x_q
+                        * *y_p
+                        * *y_q;
                     // α = inv0(1 + d x_p x_qr y_p y_qr)
                     let alpha = (Assigned::from(Scalar::one()) + lambda).invert();
                     // β = inv0(1 - d x_p x_qr y_p y_qr)
                     let beta = (Assigned::from(Scalar::one()) - lambda).invert();
                     // x_r = (x_p * y_q + x_q * y_p) * (1 + lambda)^{-1}
-                    let x_r = alpha * (x_p.clone() * y_q.clone() + x_q.clone() * y_p.clone());
+                    let x_r = alpha * (*x_p * *y_q + *x_q * *y_p);
                     // y_r = (x_p * x_q + y_p * y_q) * (1 - lambda)^{-1}
-                    let y_r = beta * (x_p.clone() * x_q.clone() + y_p.clone() * y_q.clone());
+                    let y_r = beta * (*x_p * *x_q + *y_p * *y_q);
                     (alpha, beta, x_r, y_r)
                 }
             });
@@ -244,6 +244,7 @@ impl AddConfig {
 #[cfg(test)]
 mod tests {
     use crate::ecc::chip::{EccChip, EccConfig, EccInstructions};
+    use crate::main_gate::{MainGate, MainGateConfig};
     use crate::util::RegionCtx;
     use group::{Curve, Group};
     use halo2_proofs::circuit::{Layouter, SimpleFloorPlanner, Value};
@@ -256,6 +257,7 @@ mod tests {
 
     #[derive(Clone)]
     struct TestCircuitConfig {
+        maingate_config: MainGateConfig,
         ecc_config: EccConfig,
     }
 
@@ -274,18 +276,25 @@ mod tests {
         }
 
         fn configure(meta: &mut ConstraintSystem<Base>) -> Self::Config {
-            let ecc_config = EccChip::configure(meta);
+            let maingate = MainGate::configure(meta);
+            let ecc_config = EccChip::configure(meta, maingate.config.clone());
             // todo: do we need to enable equality?
 
-            Self::Config { ecc_config }
+            Self::Config {
+                maingate_config: maingate.config,
+                ecc_config,
+            }
         }
+
+        // todo: working on trying to avoid instantiating two main-gates
 
         fn synthesize(
             &self,
             config: Self::Config,
             mut layouter: impl Layouter<Base>,
         ) -> Result<(), Error> {
-            let ecc_chip = EccChip::new(config.ecc_config.clone());
+            let main_gate = MainGate::new(config.maingate_config);
+            let ecc_chip = EccChip::new(main_gate, config.ecc_config);
 
             let assigned_val = layouter.assign_region(
                 || "Ecc addition test",
@@ -303,12 +312,12 @@ mod tests {
 
             layouter.constrain_instance(
                 assigned_val.x.cell(),
-                config.ecc_config.maingate_config.instance.clone(),
+                ecc_chip.main_gate.config.instance,
                 0,
             )?;
             layouter.constrain_instance(
                 assigned_val.y.cell(),
-                config.ecc_config.maingate_config.instance.clone(),
+                ecc_chip.main_gate.config.instance,
                 1,
             )?;
 
@@ -318,7 +327,7 @@ mod tests {
 
     #[test]
     fn test_ec_addition() {
-        const K: u32 = 11;
+        const K: u32 = 4;
 
         // useful for debugging
         let _print_coords = |a: ExtendedPoint, name: &str| {
@@ -344,6 +353,7 @@ mod tests {
         let prover =
             MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
 
+        prover.verify().unwrap();
         assert!(prover.verify().is_ok());
 
         let random_result = ExtendedPoint::random(&mut rng);

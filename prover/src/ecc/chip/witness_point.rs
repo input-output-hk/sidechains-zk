@@ -107,7 +107,7 @@ impl Config {
                 (jubjub::Base::zero(), jubjub::Base::one())
             } else {
                 let value = value.coordinates().unwrap();
-                (value.x().clone(), value.y().clone())
+                (*value.x(), *value.y())
             }
         });
 

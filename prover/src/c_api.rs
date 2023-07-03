@@ -48,14 +48,8 @@ pub extern "C" fn atms_prove(
             sigs_ptr.as_ref(),
             avk.as_ref(),
         ) {
-            let pks = slice::from_raw_parts_mut(pks_ref, nr_sigs)
-                .iter()
-                .map(|p| *p)
-                .collect::<Vec<_>>();
-            let sigs = slice::from_raw_parts_mut(sigs_ref, nr_sigs)
-                .iter()
-                .map(|p| *p)
-                .collect::<Vec<_>>();
+            let pks = slice::from_raw_parts_mut(pks_ref, nr_sigs).to_vec();
+            let sigs = slice::from_raw_parts_mut(sigs_ref, nr_sigs).to_vec();
 
             if let Ok(proof) = prove(&pks, &sigs, avk_ref) {
                 *proof_ref = Box::into_raw(Box::new(proof));
@@ -65,6 +59,6 @@ pub extern "C" fn atms_prove(
             }
         }
 
-        return 1;
+        1
     }
 }

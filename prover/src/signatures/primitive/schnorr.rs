@@ -1,11 +1,12 @@
-use std::ops::{Add, Mul};
-use ff::Field;
-use group::{Curve, Group};
-use halo2curves::CurveAffine;
-use halo2curves::jubjub::{AffinePoint, Base, ExtendedPoint, Scalar, SubgroupPoint};
-use rand_core::{CryptoRng, RngCore};
+use std::fmt::Error;
 use crate::rescue::{RescueParametersBls, RescueSponge};
 use crate::signatures::schnorr::SchnorrSig;
+use ff::Field;
+use group::{Curve, Group};
+use halo2curves::jubjub::{AffinePoint, Base, ExtendedPoint, Scalar, SubgroupPoint};
+use halo2curves::CurveAffine;
+use rand_core::{CryptoRng, RngCore};
+use std::ops::{Add, Mul};
 
 #[derive(Debug)]
 pub struct Schnorr;
@@ -23,14 +24,18 @@ impl Schnorr {
     }
 
     // probabilistic function. We can make this deterministic using EdDSA instead.
-    pub fn sign<R: CryptoRng + RngCore>(key_pair: (Scalar, AffinePoint), msg: Base, rng: &mut R) -> SchnorrSig {
+    pub fn sign<R: CryptoRng + RngCore>(
+        key_pair: (Scalar, AffinePoint),
+        msg: Base,
+        rng: &mut R,
+    ) -> SchnorrSig {
         let k = Scalar::random(rng);
         let announcement = generator().mul(k).to_affine();
 
         let input_hash = [
             *announcement.coordinates().unwrap().x(),
             *key_pair.1.coordinates().unwrap().x(),
-            msg.clone(),
+            msg,
         ];
 
         let challenge = RescueSponge::<Base, RescueParametersBls>::hash(&input_hash, None);
@@ -45,11 +50,11 @@ impl Schnorr {
         (announcement, response)
     }
 
-    pub fn verify(msg: Base, pk: AffinePoint, sig: SchnorrSig) -> Result<(), ()> {
+    pub fn verify(msg: Base, pk: AffinePoint, sig: SchnorrSig) -> Result<(), Error> {
         let input_hash = [
             *sig.0.coordinates().unwrap().x(),
             *pk.coordinates().unwrap().x(),
-            msg.clone(),
+            msg,
         ];
 
         let challenge = RescueSponge::<Base, RescueParametersBls>::hash(&input_hash, None);
@@ -62,7 +67,7 @@ impl Schnorr {
         if generator().mul(sig.1) == sig.0.add(pk.mul(reduced_challenge).to_affine()) {
             Ok(())
         } else {
-            Err(())
+            Err(Error::default())
         }
     }
 }
