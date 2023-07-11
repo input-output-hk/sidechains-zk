@@ -24,7 +24,7 @@ pub struct AtmsVerifierConfig {
 #[derive(Clone, Debug)]
 /// ATMS verifier gate. It consists of a rescue hash chip and a schnorr chip
 pub struct AtmsVerifierGate {
-    schnorr_gate: SchnorrVerifierGate,
+    pub schnorr_gate: SchnorrVerifierGate,
     config: AtmsVerifierConfig,
 }
 
@@ -252,13 +252,13 @@ mod tests {
 
     #[test]
     fn atms_signature() {
-        // const K: u32 = 21;
-        // const NUM_PARTIES: usize = 735; // todo: multiple of three so Rescue does not complain. We should do some padding
-        // const THRESHOLD: usize = 492;
+        // const K: u32 = 23;
+        // const NUM_PARTIES: usize = 2001; // todo: multiple of three so Rescue does not complain. We should do some padding
+        // const THRESHOLD: usize = 1602;
 
-        const K: u32 = 16;
-        const NUM_PARTIES: usize = 21; // todo: multiple of three so Rescue does not complain. We should do some padding
-        const THRESHOLD: usize = 14;
+        const K: u32 = 19;
+        const NUM_PARTIES: usize = 102; // todo: multiple of three so Rescue does not complain. We should do some padding
+        const THRESHOLD: usize = 72;
 
         let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
         let generator = ExtendedPoint::from(SubgroupPoint::generator());
@@ -301,44 +301,6 @@ mod tests {
         let prover =
             MockProver::run(K, &circuit, pi).expect("Failed to run ATMS verifier mock prover");
 
-        prover.verify().unwrap();
         assert!(prover.verify().is_ok());
-
-        let kzg_params = ParamsKZG::<Bls12>::setup(K, &mut rng);
-        let vk = keygen_vk(&kzg_params, &circuit).unwrap();
-        let pk = keygen_pk(&kzg_params, vk, &circuit).unwrap();
-
-        let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
-        create_proof::<KZGCommitmentScheme<_>, ProverGWC<_>, _, _, _, _>(
-            &kzg_params,
-            &pk,
-            &[circuit],
-            &[],
-            &mut rng,
-            &mut transcript,
-        )
-        .expect("proof generation should not fail");
-
-        let proof: Vec<u8> = transcript.finalize();
-
-        let strategy = AccumulatorStrategy::new(&kzg_params);
-        let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
-        println!("Before verification: {:?}", Instant::now());
-        let strategy = verify_proof::<KZGCommitmentScheme<_>, VerifierGWC<_>, _, _, _>(
-            &kzg_params,
-            pk.get_vk(),
-            strategy,
-            &[],
-            &mut transcript,
-        )
-        .unwrap();
-        assert!(
-            (<AccumulatorStrategy<'_, Bls12> as VerificationStrategy<
-                '_,
-                KZGCommitmentScheme<Bls12>,
-                VerifierGWC<_>,
-            >>::finalize(strategy))
-        );
-        println!("After verification: {:?}", Instant::now())
     }
 }

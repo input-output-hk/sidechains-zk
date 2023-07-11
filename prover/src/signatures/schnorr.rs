@@ -30,7 +30,7 @@ pub struct SchnorrVerifierConfig {
 #[derive(Clone, Debug)]
 pub struct SchnorrVerifierGate {
     pub(crate) rescue_hash_gate: RescueCrhfGate<Base, RescueParametersBls>,
-    pub(crate) ecc_gate: EccChip,
+    pub ecc_gate: EccChip,
     config: SchnorrVerifierConfig,
 }
 
