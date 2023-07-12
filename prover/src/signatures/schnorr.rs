@@ -7,6 +7,7 @@ use crate::rescue::{
 };
 use crate::util::RegionCtx;
 use crate::AssignedValue;
+use ff::Field;
 use group::prime::PrimeCurveAffine;
 use group::{Curve, Group};
 use halo2_proofs::circuit::{Chip, Value};
@@ -69,6 +70,20 @@ impl SchnorrVerifierGate {
         pk: &AssignedEccPoint,
         msg: &AssignedValue<Base>,
     ) -> Result<(), Error> {
+        let two_pk = self.ecc_gate.add(ctx, pk, pk)?;
+        let four_pk = self.ecc_gate.add(ctx, &two_pk, &two_pk)?;
+        let eight_pk = self.ecc_gate.add(ctx, &four_pk, &four_pk)?;
+
+        let one = self
+            .ecc_gate
+            .main_gate
+            .assign_bit(ctx, Value::known(Base::ONE))?;
+        // check low order PK
+        self.ecc_gate.main_gate.assert_not_zero(ctx, &eight_pk.x)?;
+        self.ecc_gate
+            .main_gate
+            .assert_not_equal(ctx, &eight_pk.y, &one)?;
+
         let input_hash = [signature.0.x.clone(), pk.x.clone(), msg.clone()];
         let challenge = self.rescue_hash_gate.hash(ctx, &input_hash)?;
 

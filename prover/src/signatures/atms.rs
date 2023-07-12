@@ -252,7 +252,7 @@ mod tests {
 
     #[test]
     fn atms_signature() {
-        // const K: u32 = 22;
+        // const K: u32 = 23;
         // const NUM_PARTIES: usize = 2001; // todo: multiple of three so Rescue does not complain. We should do some padding
         // const THRESHOLD: usize = 1602;
 
