@@ -8,7 +8,7 @@ use crate::rescue::{
 use crate::util::RegionCtx;
 use crate::AssignedValue;
 use group::prime::PrimeCurveAffine;
-use group::Group;
+use group::{Curve, Group};
 use halo2_proofs::circuit::{Chip, Value};
 use halo2_proofs::plonk::{ConstraintSystem, Error};
 use halo2curves::jubjub::{AffinePoint, Base, ExtendedPoint, Scalar, SubgroupPoint};
@@ -70,12 +70,13 @@ impl SchnorrVerifierGate {
         msg: &AssignedValue<Base>,
     ) -> Result<(), Error> {
         let input_hash = [signature.0.x.clone(), pk.x.clone(), msg.clone()];
-        let generator = self.ecc_gate.witness_point(
-            ctx,
-            &Value::known(ExtendedPoint::from(SubgroupPoint::generator()).into()),
-        )?;
         let challenge = self.rescue_hash_gate.hash(ctx, &input_hash)?;
-        let lhs = self.ecc_gate.mul(ctx, &signature.1, &generator)?;
+
+        let lhs = self.ecc_gate.fixed_mul(
+            ctx,
+            &signature.1,
+            ExtendedPoint::from(SubgroupPoint::generator()).to_affine(),
+        )?;
         let rhs_1 = self.ecc_gate.mul(ctx, &ScalarVar(challenge), pk)?;
         let rhs = self.ecc_gate.add(ctx, &signature.0, &rhs_1)?;
 

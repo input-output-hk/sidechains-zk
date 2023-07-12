@@ -1,4 +1,3 @@
-use std::fmt::Error;
 use crate::rescue::{RescueParametersBls, RescueSponge};
 use crate::signatures::schnorr::SchnorrSig;
 use ff::Field;
@@ -6,6 +5,7 @@ use group::{Curve, Group};
 use halo2curves::jubjub::{AffinePoint, Base, ExtendedPoint, Scalar, SubgroupPoint};
 use halo2curves::CurveAffine;
 use rand_core::{CryptoRng, RngCore};
+use std::fmt::Error;
 use std::ops::{Add, Mul};
 
 #[derive(Debug)]

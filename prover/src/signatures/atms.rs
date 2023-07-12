@@ -252,12 +252,12 @@ mod tests {
 
     #[test]
     fn atms_signature() {
-        // const K: u32 = 23;
+        // const K: u32 = 22;
         // const NUM_PARTIES: usize = 2001; // todo: multiple of three so Rescue does not complain. We should do some padding
         // const THRESHOLD: usize = 1602;
 
         const K: u32 = 19;
-        const NUM_PARTIES: usize = 102; // todo: multiple of three so Rescue does not complain. We should do some padding
+        const NUM_PARTIES: usize = 102;
         const THRESHOLD: usize = 72;
 
         let mut rng = ChaCha8Rng::from_seed([0u8; 32]);

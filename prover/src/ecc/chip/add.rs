@@ -136,8 +136,7 @@ impl AddConfig {
             // x_q * y_p
             let x_q_times_y_p = x_q * y_p;
             // (d x_p x_qr y_p y_qr)
-            let d_x_p_x_q_y_p_y_q =
-                edwards_d * x_p_times_x_q.clone() * y_p_times_y_q.clone();
+            let d_x_p_x_q_y_p_y_q = edwards_d * x_p_times_x_q.clone() * y_p_times_y_q.clone();
 
             // x_r * (1 + d * x_p * x_q * y_p * y_q) - x_p * y_q + x_q * y_p = 0
             let poly1 = {
@@ -198,11 +197,7 @@ impl AddConfig {
             .map(|(((x_p, y_p), x_q), y_q)| {
                 {
                     // λ = (d * x_p * x_q * y_p * y_q)
-                    let lambda = Assigned::from(EDWARDS_D)
-                        * *x_p
-                        * *x_q
-                        * *y_p
-                        * *y_q;
+                    let lambda = Assigned::from(EDWARDS_D) * *x_p * *x_q * *y_p * *y_q;
                     // α = inv0(1 + d x_p x_qr y_p y_qr)
                     let alpha = (Assigned::from(Scalar::one()) + lambda).invert();
                     // β = inv0(1 - d x_p x_qr y_p y_qr)
@@ -230,7 +225,7 @@ impl AddConfig {
         ctx.next();
         let x_r_cell = ctx.assign_advice(|| "x_r", self.x_qr, x_r)?;
         let y_r_cell = ctx.assign_advice(|| "y_r", self.y_qr, y_r)?;
-        ctx.next(); // todo: was complaining of overwriting cells, but is it required?
+        ctx.next();
 
         let result = AssignedEccPoint {
             x: x_r_cell,

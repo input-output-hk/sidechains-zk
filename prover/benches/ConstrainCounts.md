@@ -4,7 +4,8 @@ In this document we keep track of constraint count.
 * Witness point: 2 constraints
 * Point addition: 3 constraints
 * Point multiplication: 1854 (7,3 per scalar bit - without counting the range check we are at 6,08 per bit, close the CAP spec)
+* Fixed Point multiplication: 820 (3,2 per scalar bit - without counting range check we are at 2 per bit)
 
 ## Signatures
-* Schnorr signature verification: 3860
-* ATMS signature (102/72): 283090 (3930 per threshold signature)
+* Schnorr signature verification: 3860 (2824 with fixed base - 28% improvement)
+* ATMS signature (102/72): 283090 (3930 per threshold signature) - (208500 with fixed base in schnorr - 2890 per threshold - 27% improvement)

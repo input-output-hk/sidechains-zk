@@ -1,8 +1,8 @@
 //! Proof wrapper. API for higher level abstraction.
 
-use std::fmt::Error;
 use bls12_381::Scalar as BlsScalar;
 use jubjub::{Scalar, SubgroupPoint};
+use std::fmt::Error;
 
 /// EdDSA Public key, represented by a point in the subgroup of the JubJub curve
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

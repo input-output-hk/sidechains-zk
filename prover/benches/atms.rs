@@ -1,23 +1,3 @@
-use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId};
-use std::fs::{create_dir_all, File};
-use std::io::{BufReader, Write};
-use halo2_proofs::{
-    circuit::{Layouter, SimpleFloorPlanner, Value},
-    plonk::{create_proof, keygen_pk, keygen_vk, Circuit, ConstraintSystem, Error},
-    poly::kzg::commitment::{KZGCommitmentScheme, ParamsKZG},
-    poly::kzg::multiopen::ProverGWC,
-    transcript::{
-        Blake2bWrite, Challenge255, TranscriptWriterBuffer,
-    },
-};
-use halo2curves::bls12_381::Bls12;
-use halo2curves::jubjub::{AffinePoint, Base};
-use rand::prelude::IteratorRandom;
-use rand_chacha::ChaCha8Rng;
-use rand_core::SeedableRng;
-use std::path::Path;
-use ff::Field;
-use halo2_proofs::poly::commitment::Params;
 use atms_halo2::{
     ecc::chip::EccInstructions,
     instructions::MainGateInstructions,
@@ -27,6 +7,24 @@ use atms_halo2::{
     signatures::schnorr::SchnorrSig,
     util::RegionCtx,
 };
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use ff::Field;
+use halo2_proofs::poly::commitment::Params;
+use halo2_proofs::{
+    circuit::{Layouter, SimpleFloorPlanner, Value},
+    plonk::{create_proof, keygen_pk, keygen_vk, Circuit, ConstraintSystem, Error},
+    poly::kzg::commitment::{KZGCommitmentScheme, ParamsKZG},
+    poly::kzg::multiopen::ProverGWC,
+    transcript::{Blake2bWrite, Challenge255, TranscriptWriterBuffer},
+};
+use halo2curves::bls12_381::Bls12;
+use halo2curves::jubjub::{AffinePoint, Base};
+use rand::prelude::IteratorRandom;
+use rand_chacha::ChaCha8Rng;
+use rand_core::SeedableRng;
+use std::fs::{create_dir_all, File};
+use std::io::{BufReader, Write};
+use std::path::Path;
 
 #[derive(Clone)]
 struct BenchCircuitConfig {
@@ -180,7 +178,8 @@ fn atms_bench_helper(c: &mut Criterion, k: u32, num_parties: usize, threshold: u
         let mut buf = Vec::new();
 
         kzg_params.write(&mut buf).expect("Failed to write params");
-        let mut file = File::create(Path::new(&params_path)).expect("Failed to create sha256_params");
+        let mut file =
+            File::create(Path::new(&params_path)).expect("Failed to create sha256_params");
 
         file.write_all(&buf[..])
             .expect("Failed to write params to file");
@@ -188,14 +187,14 @@ fn atms_bench_helper(c: &mut Criterion, k: u32, num_parties: usize, threshold: u
 
     let params_fs = File::open(Path::new(&params_path)).expect("couldn't load sha256_params");
 
-    let kzg_params = ParamsKZG::<Bls12>::read::<_>(&mut BufReader::new(params_fs)).expect("Failed to read params");
+    let kzg_params = ParamsKZG::<Bls12>::read::<_>(&mut BufReader::new(params_fs))
+        .expect("Failed to read params");
     let vk = keygen_vk(&kzg_params, &circuit).unwrap();
     let pk = keygen_pk(&kzg_params, vk, &circuit).unwrap();
 
     let mut group = c.benchmark_group("ATMS");
-    group.bench_function(
-        BenchmarkId::new("Proof generation", threshold),
-        |b| b.iter(|| {
+    group.bench_function(BenchmarkId::new("Proof generation", threshold), |b| {
+        b.iter(|| {
             let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
             create_proof::<KZGCommitmentScheme<_>, ProverGWC<_>, _, _, _, _>(
                 &kzg_params,
@@ -205,25 +204,39 @@ fn atms_bench_helper(c: &mut Criterion, k: u32, num_parties: usize, threshold: u
                 &mut rng,
                 &mut transcript,
             )
-                .expect("proof generation should not fail");
+            .expect("proof generation should not fail");
 
             transcript.finalize();
-        }),
-    );
+        })
+    });
 }
 
-fn atms_3_of_6(c: &mut Criterion) { atms_bench_helper(c, 14, 6, 3) }
-fn atms_6_of_9(c: &mut Criterion) { atms_bench_helper(c, 15, 9, 6) }
-fn atms_8_of_9(c: &mut Criterion) { atms_bench_helper(c, 15, 9, 8) }
-fn atms_14_of_14(c: &mut Criterion) { atms_bench_helper(c, 16, 15, 15) }
-fn atms_14_of_21(c: &mut Criterion) { atms_bench_helper(c, 16, 21, 14) }
-fn atms_17_of_21(c: &mut Criterion) { atms_bench_helper(c, 17, 21, 17) }
-fn atms_28_of_42(c: &mut Criterion) { atms_bench_helper(c, 17, 42, 28) }
+fn atms_3_of_6(c: &mut Criterion) {
+    atms_bench_helper(c, 14, 6, 3)
+}
+fn atms_6_of_9(c: &mut Criterion) {
+    atms_bench_helper(c, 15, 9, 6)
+}
+fn atms_8_of_9(c: &mut Criterion) {
+    atms_bench_helper(c, 15, 9, 8)
+}
+fn atms_14_of_14(c: &mut Criterion) {
+    atms_bench_helper(c, 16, 15, 15)
+}
+fn atms_14_of_21(c: &mut Criterion) {
+    atms_bench_helper(c, 16, 21, 14)
+}
+fn atms_17_of_21(c: &mut Criterion) {
+    atms_bench_helper(c, 17, 21, 17)
+}
+fn atms_28_of_42(c: &mut Criterion) {
+    atms_bench_helper(c, 17, 42, 28)
+}
 
-criterion_group!{
+criterion_group! {
     name = benches;
     config = Criterion::default();
-    targets = atms_3_of_6, atms_6_of_9, atms_14_of_21, atms_28_of_42
+    targets = atms_3_of_6, atms_6_of_9, atms_8_of_9, atms_14_of_14, atms_14_of_21, atms_17_of_21, atms_28_of_42
 }
 
 criterion_main!(benches);
