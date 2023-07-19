@@ -349,7 +349,7 @@ impl EccInstructions<AffinePoint> for EccChip {
         cond: &AssignedCondition<Base>,
     ) -> Result<Self::Point, Error> {
         let config = self.config().add;
-        config.assign_region(ctx, a, b, &cond)
+        config.assign_region(ctx, a, b, cond)
     }
 
     fn mul(

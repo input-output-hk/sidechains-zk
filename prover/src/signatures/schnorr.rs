@@ -94,13 +94,7 @@ impl SchnorrVerifierGate {
         let input_hash = [signature.0.x.clone(), pk.x.clone(), msg.clone()];
         let challenge = self.rescue_hash_gate.hash(ctx, &input_hash)?; //  larger than mod with high prob
 
-        let lhs = self.combined_mul(
-            ctx,
-            &signature.1 .0,
-            &challenge,
-            &assigned_generator,
-            pk,
-        )?;
+        let lhs = self.combined_mul(ctx, &signature.1 .0, &challenge, &assigned_generator, pk)?;
 
         self.ecc_gate.constrain_equal(ctx, &lhs, &signature.0)?;
 
@@ -133,15 +127,22 @@ impl SchnorrVerifierGate {
         let jubjub_mod =
             Base::from_bytes(&jub_jub_scalar_bytes).expect("Failed to deserialise modulus"); // This will not fail as jubjub mod is smaller than BLS
 
-        let mult_remainder = scalar_2.value().map(|&val| {
-            let (mult, remainder) = fe_to_big(val).div_rem(&fe_to_big(jubjub_mod));
-            [big_to_fe(mult), big_to_fe(remainder)]
-        }).transpose_vec(2);
+        let mult_remainder = scalar_2
+            .value()
+            .map(|&val| {
+                let (mult, remainder) = fe_to_big(val).div_rem(&fe_to_big(jubjub_mod));
+                [big_to_fe(mult), big_to_fe(remainder)]
+            })
+            .transpose_vec(2);
 
         self.ecc_gate.main_gate.assert_zero_sum(
             ctx,
-            &[Term::Assigned(scalar_2, - Base::ONE), Term::Unassigned(mult_remainder[0], jubjub_mod), Term::Unassigned(mult_remainder[1], Base::ONE)],
-            Base::ZERO
+            &[
+                Term::Assigned(scalar_2, -Base::ONE),
+                Term::Unassigned(mult_remainder[0], jubjub_mod),
+                Term::Unassigned(mult_remainder[1], Base::ONE),
+            ],
+            Base::ZERO,
         )?;
 
         let neg_scalar_2 = self
@@ -151,15 +152,19 @@ impl SchnorrVerifierGate {
 
         self.ecc_gate.main_gate.assert_zero_sum(
             ctx,
-            &[Term::Assigned(scalar_2, Base::ONE), Term::Assigned(&neg_scalar_2, Base::ONE), Term::Unassigned(mult_remainder[0] + Value::known(Base::ONE), - jubjub_mod)],
-            Base::ZERO
+            &[
+                Term::Assigned(scalar_2, Base::ONE),
+                Term::Assigned(&neg_scalar_2, Base::ONE),
+                Term::Unassigned(mult_remainder[0] + Value::known(Base::ONE), -jubjub_mod),
+            ],
+            Base::ZERO,
         )?;
 
         // Decompose scalar into bits
         let mut decomposition_1 =
             self.ecc_gate
                 .main_gate
-                .to_bits(ctx, &scalar_1, Base::NUM_BITS as usize)?;
+                .to_bits(ctx, scalar_1, Base::NUM_BITS as usize)?;
         decomposition_1.reverse(); // to get MSB first
 
         let mut decomposition_2 =
