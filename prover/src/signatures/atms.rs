@@ -252,7 +252,7 @@ mod tests {
 
     #[test]
     fn atms_signature() {
-        // const K: u32 = 23;
+        // const K: u32 = 22; // we are 600_000 constraints above 2^21
         // const NUM_PARTIES: usize = 2001; // todo: multiple of three so Rescue does not complain. We should do some padding
         // const THRESHOLD: usize = 1602;
 
@@ -301,6 +301,6 @@ mod tests {
         let prover =
             MockProver::run(K, &circuit, pi).expect("Failed to run ATMS verifier mock prover");
 
-        assert!(prover.verify().is_ok());
+        prover.assert_satisfied();
     }
 }

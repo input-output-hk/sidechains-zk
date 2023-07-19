@@ -1,13 +1,15 @@
 //! Schnorr signature verification
 
 use crate::ecc::chip::{AssignedEccPoint, EccChip, EccConfig, EccInstructions, ScalarVar};
-use crate::instructions::MainGateInstructions;
+use crate::instructions::{MainGateInstructions, Term};
+use num_integer::Integer;
+
 use crate::rescue::{
     RescueCrhfGate, RescueCrhfGateConfig, RescueCrhfInstructions, RescueParametersBls,
 };
-use crate::util::RegionCtx;
+use crate::util::{big_to_fe, fe_to_big, RegionCtx};
 use crate::AssignedValue;
-use ff::Field;
+use ff::{Field, PrimeField};
 use group::prime::PrimeCurveAffine;
 use group::{Curve, Group};
 use halo2_proofs::circuit::{Chip, Value};
@@ -74,6 +76,11 @@ impl SchnorrVerifierGate {
         let four_pk = self.ecc_gate.add(ctx, &two_pk, &two_pk)?;
         let eight_pk = self.ecc_gate.add(ctx, &four_pk, &four_pk)?;
 
+        let assigned_generator = self.ecc_gate.witness_point(
+            ctx,
+            &Value::known(ExtendedPoint::from(SubgroupPoint::generator()).to_affine()),
+        )?;
+
         let one = self
             .ecc_gate
             .main_gate
@@ -85,19 +92,195 @@ impl SchnorrVerifierGate {
             .assert_not_equal(ctx, &eight_pk.y, &one)?;
 
         let input_hash = [signature.0.x.clone(), pk.x.clone(), msg.clone()];
-        let challenge = self.rescue_hash_gate.hash(ctx, &input_hash)?;
+        let challenge = self.rescue_hash_gate.hash(ctx, &input_hash)?; //  larger than mod with high prob
 
-        let lhs = self.ecc_gate.fixed_mul(
+        let lhs = self.combined_mul(
             ctx,
-            &signature.1,
-            ExtendedPoint::from(SubgroupPoint::generator()).to_affine(),
+            &signature.1 .0,
+            &challenge,
+            &assigned_generator,
+            pk,
         )?;
-        let rhs_1 = self.ecc_gate.mul(ctx, &ScalarVar(challenge), pk)?;
-        let rhs = self.ecc_gate.add(ctx, &signature.0, &rhs_1)?;
 
-        self.ecc_gate.constrain_equal(ctx, &lhs, &rhs)?;
+        self.ecc_gate.constrain_equal(ctx, &lhs, &signature.0)?;
 
         Ok(())
+    }
+
+    // We need to negate the second scalar prior to the addition
+    fn combined_mul(
+        &self,
+        ctx: &mut RegionCtx<'_, Base>,
+        scalar_1: &AssignedValue<Base>,
+        scalar_2: &AssignedValue<Base>,
+        base_1: &AssignedEccPoint,
+        base_2: &AssignedEccPoint,
+    ) -> Result<AssignedEccPoint, Error> {
+        // We compute a combined mul for `signature.1 * generator - challenge * pk`. For that
+        // we first negate the challenge, and the compute use combined_mul. We negate with
+        // respect to the Scalar modulus bytes. However, we allow the challenge to be above the
+        // modulus, because the loss in security is not a concern. However, this slightly complicates
+        // this negation.
+        // We need to find (a,b) = challenge.div_remainder(modulus), then compute
+        // neg_challenge = modulus - b, and prove that challenge + neg_challenge = (a + 1) * modulus
+        // With this we should save ~250 constraints, so probably worth it.
+
+        let jub_jub_scalar_bytes = [
+            183, 44, 247, 214, 94, 14, 151, 208, 130, 16, 200, 204, 147, 32, 104, 166, 0, 59, 52,
+            1, 1, 59, 103, 6, 169, 175, 51, 101, 234, 180, 125, 14,
+        ];
+
+        let jubjub_mod =
+            Base::from_bytes(&jub_jub_scalar_bytes).expect("Failed to deserialise modulus"); // This will not fail as jubjub mod is smaller than BLS
+
+        let mult_remainder = scalar_2.value().map(|&val| {
+            let (mult, remainder) = fe_to_big(val).div_rem(&fe_to_big(jubjub_mod));
+            [big_to_fe(mult), big_to_fe(remainder)]
+        }).transpose_vec(2);
+
+        self.ecc_gate.main_gate.assert_zero_sum(
+            ctx,
+            &[Term::Assigned(scalar_2, - Base::ONE), Term::Unassigned(mult_remainder[0], jubjub_mod), Term::Unassigned(mult_remainder[1], Base::ONE)],
+            Base::ZERO
+        )?;
+
+        let neg_scalar_2 = self
+            .ecc_gate
+            .main_gate
+            .assign_value(ctx, mult_remainder[1].map(|val| jubjub_mod - val))?;
+
+        self.ecc_gate.main_gate.assert_zero_sum(
+            ctx,
+            &[Term::Assigned(scalar_2, Base::ONE), Term::Assigned(&neg_scalar_2, Base::ONE), Term::Unassigned(mult_remainder[0] + Value::known(Base::ONE), - jubjub_mod)],
+            Base::ZERO
+        )?;
+
+        // Decompose scalar into bits
+        let mut decomposition_1 =
+            self.ecc_gate
+                .main_gate
+                .to_bits(ctx, &scalar_1, Base::NUM_BITS as usize)?;
+        decomposition_1.reverse(); // to get MSB first
+
+        let mut decomposition_2 =
+            self.ecc_gate
+                .main_gate
+                .to_bits(ctx, &neg_scalar_2, Base::NUM_BITS as usize)?;
+        decomposition_2.reverse(); // to get MSB first
+
+        // Initialise the aggregator at zero
+        let assigned_0x = ctx.assign_advice(
+            || "x of zero",
+            self.ecc_gate.config.add.x_pr,
+            Value::known(Base::ZERO),
+        )?;
+        ctx.next();
+
+        let assigned_0y = ctx.assign_advice(
+            || "y of zero",
+            self.ecc_gate.config.add.y_pr,
+            Value::known(Base::ONE),
+        )?;
+        ctx.assign_fixed(|| "base", self.ecc_gate.main_gate.config.sb, Base::ONE)?;
+        ctx.assign_fixed(
+            || "s_constant",
+            self.ecc_gate.main_gate.config.s_constant,
+            -Base::ONE,
+        )?;
+        ctx.next();
+
+        // We copy the aggregator to its right position
+        let assigned_aggr_x = ctx.copy_advice(
+            || "x aggregator",
+            self.ecc_gate.config.add.x_pr,
+            assigned_0x,
+        )?;
+        let assigned_aggr_y = ctx.copy_advice(
+            || "y aggregator",
+            self.ecc_gate.config.add.y_pr,
+            assigned_0y.clone(),
+        )?;
+
+        let mut assigned_aggr = AssignedEccPoint {
+            x: assigned_aggr_x,
+            y: assigned_aggr_y,
+        };
+
+        for (bit_1, bit_2) in decomposition_1.into_iter().zip(decomposition_2.into_iter()) {
+            // We copy the aggregator into the `q` cell for doubling
+            let assigned_aggr_x = ctx.copy_advice(
+                || "x aggregator double",
+                self.ecc_gate.config.add.x_q,
+                assigned_aggr.x.clone(),
+            )?;
+            let assigned_aggr_y = ctx.copy_advice(
+                || "y aggregator double",
+                self.ecc_gate.config.add.y_q,
+                assigned_aggr.y.clone(),
+            )?;
+
+            let assigned_aggr_q = AssignedEccPoint {
+                x: assigned_aggr_x,
+                y: assigned_aggr_y,
+            };
+
+            // We copy one for always performing doubling
+            let b = ctx.copy_advice(|| "one", self.ecc_gate.config.add.b, assigned_0y.clone())?;
+
+            // We perform doubling
+            assigned_aggr = self
+                .ecc_gate
+                .cond_add(ctx, &assigned_aggr, &assigned_aggr_q, &b)?;
+
+            // Now we conditionally perform addition of the first point. We begin by copying the base point to the `q` cell
+            let base_x = ctx.copy_advice(
+                || "x point cond add",
+                self.ecc_gate.config.add.x_q,
+                base_1.x.clone(),
+            )?;
+            let base_y = ctx.copy_advice(
+                || "y point cond add",
+                self.ecc_gate.config.add.y_q,
+                base_1.y.clone(),
+            )?;
+
+            let base_q = AssignedEccPoint {
+                x: base_x,
+                y: base_y,
+            };
+
+            // We now copy the bit to its right position
+            let b = ctx.copy_advice(|| "b1", self.ecc_gate.config.add.b, bit_1)?;
+
+            // Aggr = Aggr + cond_add
+            assigned_aggr = self.ecc_gate.cond_add(ctx, &assigned_aggr, &base_q, &b)?;
+
+            // Now we conditionally perform addition of the second point. We begin by copying the base point to the `q` cell
+            let base_x = ctx.copy_advice(
+                || "x point cond add",
+                self.ecc_gate.config.add.x_q,
+                base_2.x.clone(),
+            )?;
+            let base_y = ctx.copy_advice(
+                || "y point cond add",
+                self.ecc_gate.config.add.y_q,
+                base_2.y.clone(),
+            )?;
+
+            let base_q = AssignedEccPoint {
+                x: base_x,
+                y: base_y,
+            };
+
+            // We now copy the bit to its right position
+            let b = ctx.copy_advice(|| "b2", self.ecc_gate.config.add.b, bit_2)?;
+
+            // Aggr = Aggr + cond_add
+            assigned_aggr = self.ecc_gate.cond_add(ctx, &assigned_aggr, &base_q, &b)?;
+        }
+        ctx.next();
+
+        Ok(assigned_aggr)
     }
 
     /// Assign a schnorr signature
@@ -189,6 +372,7 @@ mod tests {
                     let mut ctx = RegionCtx::new(region, offset);
                     let assigned_sig =
                         schnorr_gate.assign_sig(&mut ctx, &Value::known(self.signature))?;
+
                     let assigned_msg = schnorr_gate
                         .ecc_gate
                         .main_gate
@@ -234,6 +418,7 @@ mod tests {
         let prover =
             MockProver::run(K, &circuit, pi).expect("Failed to run Schnorr verifier mock prover");
 
+        prover.assert_satisfied();
         assert!(prover.verify().is_ok());
 
         // We try to verify for a different message (the hash of the PI

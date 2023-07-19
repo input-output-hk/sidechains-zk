@@ -24,6 +24,7 @@ group = "0.13.0"
 uint = "0.9.5"
 num-bigint = "0.4.3"
 num-traits = "0.2.15"
+num-integer = "0.1.45"
 rand = "0.8.5"
 
 [dev-dependencies]

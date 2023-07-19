@@ -15,7 +15,11 @@ In this document we keep track of constraint count.
   * 3860 
   * 2824 with fixed base - 28% improvement
   * 2834 with low order check - still good
+  * 1944 with trick in mult (not in Schnorr)
+  * 1581 with trick in Schnorr equation
 * ATMS signature (102/72): 
   * 283090 (3930 per threshold signature) 
   * 208500 with fixed base in schnorr - 2890 per threshold - 27% improvement
-  
+  * 145388 with trick in mult (not in Schnorr)
+  * 118892 with trick in Schnorr equation
+

@@ -91,7 +91,7 @@ pub struct EccConfig {
     scalar_mul: Column<Advice>,
 
     /// Addition
-    add: CondAddConfig,
+    pub(crate) add: CondAddConfig,
 
     /// Witness point
     witness_point: witness_point::Config,
@@ -101,7 +101,7 @@ pub struct EccConfig {
 #[derive(Clone, Debug)]
 pub struct EccChip {
     pub main_gate: MainGate<Base>,
-    config: EccConfig,
+    pub(crate) config: EccConfig,
 }
 
 impl EccChip {
@@ -358,7 +358,6 @@ impl EccInstructions<AffinePoint> for EccChip {
         scalar: &Self::ScalarVar, // todo: we might want to have a type for scalar
         base: &Self::Point,
     ) -> Result<Self::Point, Error> {
-        self.main_gate.break_here(ctx)?;
         // Decompose scalar into bits
         let mut decomposition = self
             .main_gate
@@ -379,7 +378,11 @@ impl EccInstructions<AffinePoint> for EccChip {
             Value::known(Base::ONE),
         )?;
         ctx.assign_fixed(|| "base", self.main_gate.config.sb, Base::ONE)?;
-        ctx.assign_fixed(|| "s_constant", self.main_gate.config.s_constant, - Base::ONE)?;
+        ctx.assign_fixed(
+            || "s_constant",
+            self.main_gate.config.s_constant,
+            -Base::ONE,
+        )?;
         ctx.next();
 
         // We copy the aggregator to its right position
@@ -418,16 +421,10 @@ impl EccInstructions<AffinePoint> for EccChip {
             assigned_aggr = self.cond_add(ctx, &assigned_aggr, &assigned_aggr_q, &b)?;
 
             // Now we conditionally perform addition. We begin by copying the base point to the `q` cell
-            let base_x = ctx.copy_advice(
-                || "x point cond add",
-                self.config.add.x_q,
-                base.x.clone(),
-            )?;
-            let base_y = ctx.copy_advice(
-                || "y point cond add",
-                self.config.add.y_q,
-                base.y.clone(),
-            )?;
+            let base_x =
+                ctx.copy_advice(|| "x point cond add", self.config.add.x_q, base.x.clone())?;
+            let base_y =
+                ctx.copy_advice(|| "y point cond add", self.config.add.y_q, base.y.clone())?;
 
             let base_q = AssignedEccPoint {
                 x: base_x,
@@ -442,7 +439,6 @@ impl EccInstructions<AffinePoint> for EccChip {
         }
         ctx.next();
 
-        self.main_gate.break_here(ctx)?;
         Ok(assigned_aggr)
     }
 
