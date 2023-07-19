@@ -21,10 +21,10 @@ pub(super) mod add;
 pub mod constants;
 pub(super) mod witness_point;
 
-use crate::ecc::chip::add::AddConfig;
+use crate::ecc::chip::add::CondAddConfig;
 use crate::instructions::{MainGateInstructions, Term};
 use crate::main_gate::{MainGate, MainGateConfig};
-use crate::util::RegionCtx;
+use crate::util::{decompose, RegionCtx};
 use crate::{AssignedCondition, AssignedValue};
 pub use constants::*;
 
@@ -88,16 +88,10 @@ impl AssignedEccPoint {
 #[allow(non_snake_case)]
 pub struct EccConfig {
     /// Advice columns needed
-    x_p: Column<Advice>,
-    y_p: Column<Advice>,
-    x_qr: Column<Advice>,
-    y_qr: Column<Advice>,
-    alpha: Column<Advice>,
-    beta: Column<Advice>,
     scalar_mul: Column<Advice>,
 
     /// Addition
-    add: AddConfig,
+    add: CondAddConfig,
 
     /// Witness point
     witness_point: witness_point::Config,
@@ -124,29 +118,22 @@ impl EccChip {
         let q_add = meta.complex_selector();
 
         // we reuse maingate's columns We just need two extra columns
-        let x_p = maingate_config.a;
-        let y_p = maingate_config.b;
+        let x_pr = maingate_config.a;
+        let y_pr = maingate_config.b;
 
-        let x_qr = maingate_config.c;
-        let y_qr = maingate_config.d;
+        let x_q = maingate_config.c;
+        let y_q = maingate_config.d;
 
-        let alpha = maingate_config.e;
-        let beta = meta.advice_column();
+        let b = meta.advice_column(); // todo: fails if I assign e
 
         let scalar_mul = meta.advice_column();
         meta.enable_equality(scalar_mul);
 
-        let add_config = AddConfig::configure(meta, x_p, y_p, x_qr, y_qr, alpha, beta);
+        let add_config = CondAddConfig::configure(meta, b, x_pr, y_pr, x_q, y_q);
 
-        let witness_config = witness_point::Config::configure(meta, x_p, y_p);
+        let witness_config = witness_point::Config::configure(meta, x_pr, y_pr);
 
         EccConfig {
-            x_p,
-            y_p,
-            x_qr,
-            y_qr,
-            alpha,
-            beta,
             scalar_mul,
             add: add_config,
             witness_point: witness_config,
@@ -211,6 +198,21 @@ pub trait EccInstructions<C: CurveAffine>: Chip<C::Base> + Clone + Debug {
         ctx: &mut RegionCtx<'_, C::Base>,
         a: &Self::Point,
         b: &Self::Point,
+    ) -> Result<Self::Point, Error>;
+
+    /// Performs a conditional addition, return `a + cond * b`. Takes as input an
+    /// `Option` of a point as a first argument such that one can provide `None`,
+    /// in which case the function assumes that that value is already assigned by a
+    /// previous call to this function.
+    ///
+    /// This function does not call `ctx.next()`, after the addition, meaning that the
+    /// offset is set in the row were the result is stored.
+    fn cond_add(
+        &self,
+        ctx: &mut RegionCtx<'_, Base>,
+        a: &Self::Point,
+        b: &Self::Point,
+        cond: &AssignedCondition<Base>,
     ) -> Result<Self::Point, Error>;
 
     /// Performs variable-base scalar multiplication, returning `[scalar] base`.
@@ -309,12 +311,45 @@ impl EccInstructions<AffinePoint> for EccChip {
     fn add(
         &self,
         ctx: &mut RegionCtx<'_, Base>,
-        a: &Self::Point,
-        b: &Self::Point,
+        lhs: &Self::Point,
+        rhs: &Self::Point,
     ) -> Result<Self::Point, Error> {
         let config = self.config().add;
 
-        config.assign_region(ctx, a, b)
+        let cond = ctx.assign_advice(|| "bit", self.config.add.b, Value::known(Base::ONE))?;
+        self.main_gate.assert_one(ctx, &cond)?;
+
+        let b = ctx.copy_advice(|| "b", self.config.add.b, cond)?; // todo: extra row :: necessary?
+
+        // Copy point `lhs` into `x_pr`, `y_pr` columns
+        let lhs_x = ctx.assign_advice(|| "x_p", self.config.add.x_pr, lhs.x.value().map(|v| *v))?;
+        // ctx.constrain_equal(lhs_x.cell(), lhs.x.cell())?;
+        let lhs_y = ctx.assign_advice(|| "y_p", self.config.add.y_pr, lhs.y.value().map(|v| *v))?;
+        // ctx.constrain_equal(lhs_y.cell(), lhs.y.cell())?;
+        // Copy point `q` into `x_q`, `y_q` columns
+        let rhs_x = ctx.assign_advice(|| "x_q", self.config.add.x_q, rhs.x.value().map(|v| *v))?;
+        // ctx.constrain_equal(rhs_x.cell(), rhs.x.cell())?;
+        let rhs_y = ctx.assign_advice(|| "y_q", self.config.add.y_q, rhs.y.value().map(|v| *v))?;
+        // ctx.constrain_equal(rhs_y.cell(), rhs.x.cell())?;
+
+        let lhs = AssignedEccPoint { x: lhs_x, y: lhs_y };
+
+        let rhs = AssignedEccPoint { x: rhs_x, y: rhs_y };
+
+        let res = config.assign_region(ctx, &lhs, &rhs, &b);
+        ctx.next();
+        res
+    }
+
+    fn cond_add(
+        &self,
+        ctx: &mut RegionCtx<'_, Base>,
+        a: &Self::Point,
+        b: &Self::Point,
+        cond: &AssignedCondition<Base>,
+    ) -> Result<Self::Point, Error> {
+        let config = self.config().add;
+        config.assign_region(ctx, a, b, &cond)
     }
 
     fn mul(
@@ -323,61 +358,91 @@ impl EccInstructions<AffinePoint> for EccChip {
         scalar: &Self::ScalarVar, // todo: we might want to have a type for scalar
         base: &Self::Point,
     ) -> Result<Self::Point, Error> {
-        let mut assigned_p = base.clone();
-
+        self.main_gate.break_here(ctx)?;
         // Decompose scalar into bits
-        let decomposition = self
+        let mut decomposition = self
             .main_gate
             .to_bits(ctx, &scalar.0, Base::NUM_BITS as usize)?;
+        decomposition.reverse(); // to get MSB first
 
-        // Proceed with double and add algorithm for each bit of the scalar
         // Initialise the aggregator at zero
-        let assigned_0x =
-            ctx.assign_advice(|| "x of zero", self.config.x_qr, Value::known(Base::ZERO))?;
-
-        let assigned_0y =
-            ctx.assign_advice(|| "y of zero", self.config.y_qr, Value::known(Base::ONE))?;
-
+        let assigned_0x = ctx.assign_advice(
+            || "x of zero",
+            self.config.add.x_pr,
+            Value::known(Base::ZERO),
+        )?;
         ctx.next();
 
-        let assigned_0 = AssignedEccPoint {
-            x: assigned_0x.clone(),
-            y: assigned_0y.clone(),
+        let assigned_0y = ctx.assign_advice(
+            || "y of zero",
+            self.config.add.y_pr,
+            Value::known(Base::ONE),
+        )?;
+        ctx.assign_fixed(|| "base", self.main_gate.config.sb, Base::ONE)?;
+        ctx.assign_fixed(|| "s_constant", self.main_gate.config.s_constant, - Base::ONE)?;
+        ctx.next();
+
+        // We copy the aggregator to its right position
+        let assigned_aggr_x =
+            ctx.copy_advice(|| "x aggregator", self.config.add.x_pr, assigned_0x)?;
+        let assigned_aggr_y =
+            ctx.copy_advice(|| "y aggregator", self.config.add.y_pr, assigned_0y.clone())?;
+
+        let mut assigned_aggr = AssignedEccPoint {
+            x: assigned_aggr_x,
+            y: assigned_aggr_y,
         };
 
-        // We clone the cell of zero, to make it mutable for ease of looping over the bits
-        let mut assigned_aggr = assigned_0.clone();
+        for (index, bit) in decomposition.into_iter().enumerate() {
+            // We copy the aggregator into the `q` cell for doubling
+            let assigned_aggr_x = ctx.copy_advice(
+                || "x aggregator double",
+                self.config.add.x_q,
+                assigned_aggr.x.clone(),
+            )?;
+            let assigned_aggr_y = ctx.copy_advice(
+                || "y aggregator double",
+                self.config.add.y_q,
+                assigned_aggr.y.clone(),
+            )?;
 
-        // Constrain the zero point
-        self.main_gate.assert_zero(ctx, &assigned_0x)?;
-        self.main_gate.assert_one(ctx, &assigned_0y)?;
-
-        for bit in decomposition {
-            let cond_add_x = self
-                .main_gate
-                .select(ctx, &assigned_p.x, &assigned_0.x, &bit)?;
-            let cond_add_y = self
-                .main_gate
-                .select(ctx, &assigned_p.y, &assigned_0.y, &bit)?;
-
-            let assigned_cond_add = AssignedEccPoint {
-                x: cond_add_x,
-                y: cond_add_y,
+            let assigned_aggr_q = AssignedEccPoint {
+                x: assigned_aggr_x,
+                y: assigned_aggr_y,
             };
 
+            // We copy one for always performing doubling
+            let b = ctx.copy_advice(|| "one", self.config.add.b, assigned_0y.clone())?;
+
+            // We perform doubling
+            assigned_aggr = self.cond_add(ctx, &assigned_aggr, &assigned_aggr_q, &b)?;
+
+            // Now we conditionally perform addition. We begin by copying the base point to the `q` cell
+            let base_x = ctx.copy_advice(
+                || "x point cond add",
+                self.config.add.x_q,
+                base.x.clone(),
+            )?;
+            let base_y = ctx.copy_advice(
+                || "y point cond add",
+                self.config.add.y_q,
+                base.y.clone(),
+            )?;
+
+            let base_q = AssignedEccPoint {
+                x: base_x,
+                y: base_y,
+            };
+
+            // We now copy the bit to its right position
+            let b = ctx.copy_advice(|| format!("b{}", index), self.config.add.b, bit)?;
+
             // Aggr = Aggr + cond_add
-            assigned_aggr =
-                self.config
-                    .add
-                    .assign_region(ctx, &assigned_aggr, &assigned_cond_add)?;
-
-            // Point = [2] Point
-            assigned_p = self
-                .config
-                .add
-                .assign_region(ctx, &assigned_p, &assigned_p)?;
+            assigned_aggr = self.cond_add(ctx, &assigned_aggr, &base_q, &b)?;
         }
+        ctx.next();
 
+        self.main_gate.break_here(ctx)?;
         Ok(assigned_aggr)
     }
 
@@ -663,6 +728,7 @@ mod tests {
         let prover =
             MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
 
+        prover.verify().unwrap();
         assert!(prover.verify().is_ok());
 
         let random_result = ExtendedPoint::random(&mut rng);

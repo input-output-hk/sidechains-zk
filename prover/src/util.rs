@@ -46,6 +46,20 @@ impl<'a, F: PrimeField> RegionCtx<'a, F> {
             .assign_fixed(annotation, column, self.offset, || Value::known(value))
     }
 
+    pub fn copy_advice<A, AR>(
+        &mut self,
+        annotation: A,
+        column: Column<Advice>,
+        cell: AssignedCell<F, F>,
+    ) -> Result<AssignedCell<F, F>, Error>
+    where
+        A: Fn() -> AR,
+        AR: Into<String>,
+    {
+        let offset = self.offset;
+        cell.copy_advice(annotation, &mut self.region, column, offset)
+    }
+
     pub fn assign_advice_from_instance<A, AR>(
         &mut self,
         annotation: A,

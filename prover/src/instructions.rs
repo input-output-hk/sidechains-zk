@@ -983,7 +983,7 @@ pub trait MainGateInstructions<F: PrimeField, const WIDTH: usize>: Chip<F> {
     }
 
     /// Assigns array values of bit values which is equal to decomposition of
-    /// given assigned value
+    /// given assigned value. LSB bit first
     fn to_bits(
         &self,
         ctx: &mut RegionCtx<'_, F>,
