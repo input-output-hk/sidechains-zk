@@ -7,15 +7,12 @@ edition = "2021"
 name = "atms_halo2"
 crate-type = ["lib", "cdylib", "staticlib"]
 
-[patch."https://github.com/iquerejeta/halo2curves.git"]
-halo2curves = { path = "../../../CryptoLibs/halo2-explorations/halo2curves" }
-
 [dependencies]
 bls12_381 = { version = "0.8.0", features = ["groups"] }
 ff = "0.13.0"
 jubjub = "0.10.0"
-halo2curves = { git = "https://github.com/iquerejeta/halo2curves" }
-halo2_proofs = { git = "https://github.com/iquerejeta/halo2" }
+halo2curves = { git = "https://github.com/iquerejeta/halo2curves", rev = "abf0604f0404dd1745548e08eddac6ae361305c1" }
+halo2_proofs = { git = "https://github.com/iquerejeta/halo2", branch = "iquerejeta/support-bls12-381" }
 paste = "1"
 poseidon = { git = "https://github.com/iquerejeta/Poseidon252"}
 rand_core = "0.6.4"
