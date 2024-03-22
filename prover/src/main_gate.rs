@@ -572,7 +572,7 @@ impl<F: PrimeField> MainGate<F> {
     pub fn new(config: MainGateConfig) -> Self {
         MainGate {
             config,
-            _marker: PhantomData::default(),
+            _marker: PhantomData,
         }
     }
 

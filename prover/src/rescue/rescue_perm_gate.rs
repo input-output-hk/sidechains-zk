@@ -61,7 +61,7 @@ where
         RescuePermGate {
             maingate: MainGate::new(config.clone().maingate_config),
             config,
-            rescue_parameters: PhantomData::default(),
+            rescue_parameters: PhantomData,
         }
     }
 

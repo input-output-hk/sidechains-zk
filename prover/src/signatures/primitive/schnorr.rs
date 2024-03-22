@@ -67,7 +67,7 @@ impl Schnorr {
         if generator().mul(sig.1) == sig.0.add(pk.mul(reduced_challenge).to_affine()) {
             Ok(())
         } else {
-            Err(Error::default())
+            Err(Error)
         }
     }
 }
