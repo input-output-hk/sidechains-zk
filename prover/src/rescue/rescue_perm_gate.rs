@@ -96,7 +96,7 @@ where
     F: PrimeField,
     RP: RescueParameters<F>,
 {
-    /// Given a state st, computes a new state by mapping st[i] to st_a[i] + st_b[i]
+    /// Given a state st, computes a new state by mapping st\[i\] to st_a\[i\] + st_b\[i\]
     fn state_addition(
         &self,
         ctx: &mut RegionCtx<'_, F>,
@@ -104,7 +104,7 @@ where
         st_b: AssignedRescueStateRef<F>,
     ) -> Result<AssignedRescueState<F>, Error>;
 
-    /// Given a state st, computes a new state by mapping st[i] to st_a[i] + st_b[i]
+    /// Given a state st, computes a new state by mapping st\[i\] to st_a\[i\] + st_b\[i\]
     fn state_negation(
         &self,
         ctx: &mut RegionCtx<'_, F>,
@@ -112,7 +112,7 @@ where
         st_b: AssignedRescueStateRef<F>,
     ) -> Result<AssignedRescueState<F>, Error>;
 
-    /// Given a constant state st, computes a new state by mapping st[i] to st[i] + constant[i]
+    /// Given a constant state st, computes a new state by mapping st\[i\] to st\[i\] + constant\[i\]
     fn constant_state_addition(
         &self,
         ctx: &mut RegionCtx<'_, F>,
@@ -120,7 +120,7 @@ where
         constant: &RescueState<F>,
     ) -> Result<AssignedRescueState<F>, Error>;
 
-    /// Given a state st, computes a new state by mapping st[i] to st[i]^{1/5}
+    /// Given a state st, computes a new state by mapping st\[i\] to st\[i\]^{1/5}
     fn state_inversion(
         &self,
         ctx: &mut RegionCtx<'_, F>,

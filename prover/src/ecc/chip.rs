@@ -159,7 +159,7 @@ pub trait EccInstructions<C: CurveAffine>: Chip<C::Base> + Clone + Debug {
     /// Variable representing a scalar used in variable-base scalar mul.
     ///
     /// This type is treated as a full-width scalar. However, if `Self` implements
-    /// [`BaseFitsInScalarInstructions`] then this may also be constructed from an element
+    /// \[`BaseFitsInScalarInstructions`\] then this may also be constructed from an element
     /// of the base field.
     type ScalarVar: Clone + Debug;
     /// Variable representing an elliptic curve point.

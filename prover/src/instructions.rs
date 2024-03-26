@@ -1205,7 +1205,7 @@ pub trait MainGateInstructions<F: PrimeField, const WIDTH: usize>: Chip<F> {
     }
 
     /// Affine combination of 4 values added with a constant affine value.
-    /// Result is sum( vals[i] * constants[i] + aff_constant)
+    /// Result is sum( vals\[i\] * constants\[i\] + aff_constant)
     fn const_affine_transformation(
         &self,
         ctx: &mut RegionCtx<'_, F>,
@@ -1226,7 +1226,7 @@ pub trait MainGateInstructions<F: PrimeField, const WIDTH: usize>: Chip<F> {
         val: Value<F>,
     ) -> Result<AssignedValue<F>, Error>;
 
-    /// Computes sum( constant[i] * value[i]^5 + c)
+    /// Computes sum( constant\[i\] * value\[i\]^5 + c)
     /// In specs: Non-linear Transformations
     fn sum_pow_5_const(
         &self,

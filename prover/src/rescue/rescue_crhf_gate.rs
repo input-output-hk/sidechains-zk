@@ -83,7 +83,7 @@ pub trait RescueCrhfInstructions<F>: Chip<F>
 where
     F: PrimeField,
 {
-    /// Given a constant state st, computes a new state by mapping st[i] to st[i] + constant[i]
+    /// Given a constant state st, computes a new state by mapping st\[i\] to st\[i\] + constant\[i\]
     fn hash(
         &self,
         ctx: &mut RegionCtx<'_, F>,
