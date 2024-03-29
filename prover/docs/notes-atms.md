@@ -1,16 +1,16 @@
 # ATMS Verifier Instructions
 **Input:**
 - A list of signatures: `&[Option<AssignedSchnorrSignature>]`
-    - Collect Schnorr signatures, see [AssignedSchnorrSignature](https://).
+    - Collect Schnorr signatures, see [AssignedSchnorrSignature](../schnorr/type.AssignedSchnorrSignature.html).
     - Use `Option`, because there might not be a signature for every index, but we want them to be 'indexed' in agreement with the public keys.
 - A list of public keys: `&[AssignedEccPoint]`
     - Public keys of all the eligible parties even if they do not participate.
-    - Public keys are ECC points, see [AssignedEccPoint](https://).
+    - Public keys are ECC points, see [AssignedEccPoint](../../ecc/chip/struct.AssignedEccPoint.html).
 - A commitment of all public keys: `&AssignedValue<Base>`
     - This is the aggregated public key.
-    - The committed public key is an element of the base field $\mathbb{F}_q$ of the Jubjub elliptic curve construction, see [Base](https://).
-- Message to be signed of the form [Base](https://).
-- Threshold value of the form [Base](https://).
+    - The committed public key is an element of the base field $\mathbb{F}_q$ of the Jubjub elliptic curve construction, see [Base](../../../jubjub/type.Base.html).
+- Message to be signed of the form [Base](../../../jubjub/type.Base.html).
+- Threshold value of the form [Base](../../../jubjub/type.Base.html).
 
 **Goal of the Circuit:**
 - Verify that for the given message and public keys
