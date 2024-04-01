@@ -12,6 +12,7 @@
   - Let $P$ and $Q$ be points on $E(\mathbb{F}_p)$ and $Q = n \cdot P$.
   - Knowing $P$ and $Q$, finding $n = \log_P^Q$ is a hard problem.
 - Base point: Let $G$ be a base point, then $G$ generates all points at $E(\mathbb{F}_p)$.
+
 ## Schnorr signature scheme
 A Schnorr signature consists of the following functions:
 * $keygen$ 
