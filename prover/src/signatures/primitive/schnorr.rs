@@ -16,6 +16,11 @@ fn generator() -> ExtendedPoint {
 }
 
 impl Schnorr {
+    /// Key generation for a Schnorr signer.
+    /// Select a random `scalar` as the secret key of the signer. It is an element of the scalar
+    /// field of `jubjub` curve.
+    /// Compute the public key as an affine elliptic curve point. $sk \cdot G$.
+    /// Return the key pair `(sk, pk)`.
     pub fn keygen<R: CryptoRng + RngCore>(rng: &mut R) -> (Scalar, AffinePoint) {
         let sk = Scalar::random(rng);
         let pk = generator().mul(sk).to_affine();
@@ -24,6 +29,9 @@ impl Schnorr {
     }
 
     // probabilistic function. We can make this deterministic using EdDSA instead.
+    /// Schnorr signature generation.
+    /// See [Schnorr signature scheme sign function](crate::signatures::primitive::schnorr).
+    #[doc = include_str!("../../../docs/schnorr_primitive_sign.md")]
     pub fn sign<R: CryptoRng + RngCore>(
         key_pair: (Scalar, AffinePoint),
         msg: Base,
@@ -46,10 +54,12 @@ impl Schnorr {
         let reduced_challenge = Scalar::from_bytes_wide(&wide_bytes);
 
         let response = k + reduced_challenge * key_pair.0;
-
         (announcement, response)
     }
 
+    /// Schnorr verify signature.
+    /// See [Schnorr signature scheme verify function](crate::signatures::primitive::schnorr).
+    #[doc = include_str!("../../../docs/schnorr_primitive_verify.md")]
     pub fn verify(msg: Base, pk: AffinePoint, sig: SchnorrSig) -> Result<(), Error> {
         let input_hash = [
             *sig.0.coordinates().unwrap().x(),

@@ -15,7 +15,7 @@ pub mod rescue;
 pub mod signatures;
 
 mod c_api;
-pub mod proof;
+mod proof;
 pub mod util;
 
 /// AssignedValue

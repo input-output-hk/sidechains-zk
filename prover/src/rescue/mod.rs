@@ -1,4 +1,4 @@
-//! This module contains modules for the rescue hash function.  
+//! Modules for the rescue hash function.
 
 mod primitive;
 mod rescue_counter_mode;

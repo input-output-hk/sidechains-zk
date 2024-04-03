@@ -1,5 +1,6 @@
-//! Basic arithmetic, logic and branching instructions for a standard like PLONK
-//! gate. While many of implementations takes place here they can be overridden
+//! Basic arithmetic, logic and branching instructions for a standard like PLONK gate.
+//!
+//! While many of implementations takes place here they can be overridden
 //! for optimisation purposes.
 
 use crate::main_gate::{ColumnTags, MainGateColumn};
