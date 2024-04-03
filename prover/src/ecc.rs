@@ -8,4 +8,5 @@ use halo2_proofs::{
     plonk::Error,
 };
 
+#[doc = include_str!("../docs/ecc_twisted_edwards.md")]
 pub mod chip;
