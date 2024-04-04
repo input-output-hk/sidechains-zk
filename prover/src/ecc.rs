@@ -1,5 +1,4 @@
 //! Elliptic curve operations.
-
 use std::fmt::Debug;
 
 use halo2_proofs::{
@@ -8,5 +7,6 @@ use halo2_proofs::{
     plonk::Error,
 };
 
-#[doc = include_str!("../docs/ecc_twisted_edwards.md")]
 pub mod chip;
+#[doc = include_str!("../docs/docs-ecc.md")]
+pub mod Documentation {}
