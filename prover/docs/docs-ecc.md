@@ -63,11 +63,11 @@ Let $B$ be the base point of $E_{E, a, d}$ with order $l$ and $H$ be a hash func
 ### Curve setting
 * $z =$ -0xd201000000010000 (hexadecimal): low hamming weight, few bits set to $1$.
     * Field modulus: $q = \frac{1}{3}(z-1)^2(z^4 - z^2 + 1) + z$, $381$-bit
-  ```
+  ```ignore
   0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab	
   ```
     * Subgroup size: $r = (z^4 - z^2 + 1)$, $255$-bit.
-  ``` 
+  ```ignore
   0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001
   ```
 * **Curve 1:** $E(\mathbb{F}_q): y^2 = x^3 + 4$.
@@ -94,11 +94,11 @@ $$e(\[a\]P, \[b\]Q) = e(P, \[b\]Q)^a = e(P, Q)^{ab} = e(P, \[a\]Q)b = e(\[b\]P, 
 ## jubjub
 
 Jubjub is an elliptic curve of the twisted Edward's form. It is defined over finite field $\mathbb{F}_q$ where
-``` 
+```ignore 
 q = 0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001
 ```
 with a subgroup of order $r$ and cofactor $8$.
-``` 
+```ignore 
 r = 0x0e7db4ea6533afa906673b0101343b00a6682093ccc81082d0970e5ed6f72cb7
 ```
 Let $d = -(10240/10241)$, the Jubjub curve is defined as follows:

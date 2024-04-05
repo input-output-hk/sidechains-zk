@@ -1,5 +1,5 @@
 # Schnorr Signature
-See [ECC toolbox][crate::ecc::Documentation#asic-ecc-toolbox].
+See [ECC toolbox][crate::ecc::documentation#asic-ecc-toolbox].
 
 A Schnorr signature consists of the following functions:
 ## $keygen$ 

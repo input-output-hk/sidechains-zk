@@ -9,4 +9,4 @@ use halo2_proofs::{
 
 pub mod chip;
 #[doc = include_str!("../docs/docs-ecc.md")]
-pub mod Documentation {}
+pub mod documentation {}

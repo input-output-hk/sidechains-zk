@@ -1,5 +1,4 @@
-//! We implement a gate that verifies the validity of an ATMS signature given the threshold
-//! and public key commitment as Public Inputs.
+#![doc = include_str!("../../docs/atms/example.md")]
 
 use crate::ecc::chip::{AssignedEccPoint, EccChip, EccConfig, EccInstructions};
 use crate::instructions::MainGateInstructions;
@@ -16,20 +15,26 @@ use halo2_proofs::circuit::{Chip, Value};
 use halo2_proofs::plonk::{ConstraintSystem, Error};
 use halo2curves::jubjub::Base;
 
+/// Configuration for `AtmsVerifierGate`.
+///
+/// Includes [SchnorrVerifierConfig].
 #[derive(Clone, Debug)]
 pub struct AtmsVerifierConfig {
     schnorr_config: SchnorrVerifierConfig,
 }
 
+/// ATMS verifier gate.
+///
+/// It consists of [SchnorrVerifierGate] and [AtmsVerifierConfig].
 #[derive(Clone, Debug)]
-/// ATMS verifier gate. It consists of a rescue hash chip and a schnorr chip
 pub struct AtmsVerifierGate {
     pub schnorr_gate: SchnorrVerifierGate,
     config: AtmsVerifierConfig,
 }
 
 impl AtmsVerifierGate {
-    /// Initialise the gate
+    /// Initialise the [AtmsVerifierGate] by initializing the [SchnorrVerifierGate].
+    /// Return the initialized gate which also includes the [AtmsVerifierConfig].
     pub fn new(config: AtmsVerifierConfig) -> Self {
         Self {
             schnorr_gate: SchnorrVerifierGate::new(config.clone().schnorr_config),
@@ -37,25 +42,17 @@ impl AtmsVerifierGate {
         }
     }
 
-    /// Configure the ATMS gate
+    /// Configure the ATMS gate by configuring [SchnorrVerifierGate].
+    /// Return the [AtmsVerifierConfig].
     pub fn configure(meta: &mut ConstraintSystem<Base>) -> AtmsVerifierConfig {
         AtmsVerifierConfig {
             schnorr_config: SchnorrVerifierGate::configure(meta),
         }
     }
 
-    /// ATMS verifier instruction. Takes as input:
-    /// * A list of `Option<AssignedSchnorrSignature>`s. We take options as we may not have a signature
-    ///   for every index, but we want them to be 'indexed' in agreement with the public keys
-    /// * A list of all public keys of eligible members (including those that do not participate)
-    /// * A commitment of all public keys
-    /// * A message `msg`,
-    /// * The threshold of the number of valid signatures needed
+    /// ATMS verifier instruction.
     ///
-    /// The circuit will verify that exactly a threshold amount of valid signatures exist for
-    /// the given message and public keys that pertain to the committed set. This means that if
-    /// the prover has more signatures, it should still only provide a proof for the given
-    /// threshold.
+    #[doc = include_str!("../../docs/atms/notes.md")]
     pub fn verify(
         &self,
         ctx: &mut RegionCtx<'_, Base>,
