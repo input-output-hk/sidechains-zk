@@ -1,3 +1,4 @@
+#![doc = include_str!("../../../docs/schnorr/notes-schnorr-primitive.md")]
 use crate::rescue::{RescueParametersBls, RescueSponge};
 use crate::signatures::schnorr::SchnorrSig;
 use ff::Field;
