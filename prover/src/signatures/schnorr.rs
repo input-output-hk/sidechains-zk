@@ -2,8 +2,6 @@
 
 use crate::ecc::chip::{AssignedEccPoint, EccChip, EccConfig, EccInstructions, ScalarVar};
 use crate::instructions::{MainGateInstructions, Term};
-use num_integer::Integer;
-
 use crate::rescue::{
     RescueCrhfGate, RescueCrhfGateConfig, RescueCrhfInstructions, RescueParametersBls,
 };
@@ -15,21 +13,42 @@ use group::{Curve, Group};
 use halo2_proofs::circuit::{Chip, Value};
 use halo2_proofs::plonk::{ConstraintSystem, Error};
 use halo2curves::jubjub::{AffinePoint, Base, ExtendedPoint, Scalar, SubgroupPoint};
+use num_integer::Integer;
 
 /// Type of an Assigned Schnorr Signature
+///
+/// Assigned Schnorr signature contains:
+/// - [AssignedEccPoint] and
+/// - [ScalarVar].
 pub type AssignedSchnorrSignature = (AssignedEccPoint, ScalarVar);
 
 /// Type of a Schnorr Signature
+///
+/// Schnorr signature consists of
+/// - An affine point on jubjub curve: [AffinePoint]
+/// - A [Scalar] which is an element of the scalar field $\mathbb{F}_r$ of the Jubjub curve.
 pub type SchnorrSig = (AffinePoint, Scalar);
 
 /// Configuration for SchnorrVerifierGate
+///
+/// Schnorr verifier config includes the following configurations:
+/// - [RescueCrhfGateConfig]
+/// - [EccConfig]
+///
+/// Since we will make use of hash functions and ecc operations
+/// within the Schnorr signature scheme.
 #[derive(Clone, Debug)]
 pub struct SchnorrVerifierConfig {
     rescue_hash_config: RescueCrhfGateConfig,
     pub(crate) ecc_config: EccConfig,
 }
 
-/// Schnorr verifier Gate. It consists of a rescue hash chip and ecc chip.
+/// Schnorr verifier Gate.
+///
+/// It consists of:
+/// - [RescueCrhfGate]
+/// - [EccChip]
+/// - [SchnorrVerifierConfig]
 #[derive(Clone, Debug)]
 pub struct SchnorrVerifierGate {
     pub(crate) rescue_hash_gate: RescueCrhfGate<Base, RescueParametersBls>,
@@ -38,7 +57,8 @@ pub struct SchnorrVerifierGate {
 }
 
 impl SchnorrVerifierGate {
-    /// Initialise the gate
+    /// Initialise the [SchnorrVerifierGate] by initializing the [RescueCrhfGate] and [EccChip].
+    /// Return the initialized gate which also includes the [SchnorrVerifierConfig].
     pub fn new(config: SchnorrVerifierConfig) -> Self {
         let rescue_hash_gate = RescueCrhfGate::new(config.clone().rescue_hash_config);
 
@@ -52,7 +72,8 @@ impl SchnorrVerifierGate {
         }
     }
 
-    /// Configure the schnorr gate
+    /// Configure the schnorr gate by configuring [RescueCrhfGate] and [EccChip].
+    /// Return the [SchnorrVerifierConfig].
     pub fn configure(meta: &mut ConstraintSystem<Base>) -> SchnorrVerifierConfig {
         let rescue_hash_config = RescueCrhfGate::<Base, RescueParametersBls>::configure(meta);
         SchnorrVerifierConfig {
@@ -65,6 +86,9 @@ impl SchnorrVerifierGate {
     }
 
     /// Schnorr verifier instruction
+    /// See [$verify$][crate::signatures::primitive::schnorr] of Schnorr signature
+    /// and its [implementation][crate::signatures::primitive::schnorr::Schnorr::verify()].
+    #[doc = include_str!("../../docs/schnorr/gate-verify.md")]
     pub fn verify(
         &self,
         ctx: &mut RegionCtx<'_, Base>,
@@ -95,7 +119,6 @@ impl SchnorrVerifierGate {
         let challenge = self.rescue_hash_gate.hash(ctx, &input_hash)?; //  larger than mod with high prob
 
         let lhs = self.combined_mul(ctx, &signature.1 .0, &challenge, &assigned_generator, pk)?;
-
         self.ecc_gate.constrain_equal(ctx, &lhs, &signature.0)?;
 
         Ok(())
@@ -289,6 +312,10 @@ impl SchnorrVerifierGate {
     }
 
     /// Assign a schnorr signature
+    ///
+    /// Assign the [AffinePoint] and [Scalar] of the Schnorr signature
+    /// to [witness_point][crate::ecc::chip::EccChip::witness_point()]
+    /// and [witness_scalar_var][crate::ecc::chip::EccChip::witness_scalar_var()] respectively to the `ecc_gate`.
     pub fn assign_sig(
         &self,
         ctx: &mut RegionCtx<'_, Base>,

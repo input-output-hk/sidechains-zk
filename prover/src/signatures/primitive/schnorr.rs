@@ -1,4 +1,4 @@
-#![doc = include_str!("../../../docs/schnorr/notes-schnorr-primitive.md")]
+#![doc = include_str!("../../../docs/schnorr/notes-primitive.md")]
 use crate::rescue::{RescueParametersBls, RescueSponge};
 use crate::signatures::schnorr::SchnorrSig;
 use ff::Field;
@@ -31,8 +31,8 @@ impl Schnorr {
 
     // probabilistic function. We can make this deterministic using EdDSA instead.
     /// Schnorr signature generation.
-    /// See [Schnorr signature scheme sign function](crate::signatures::primitive::schnorr).
-    #[doc = include_str!("../../../docs/schnorr/schnorr_primitive_sign.md")]
+    /// See [Schnorr signature scheme](crate::signatures::primitive::schnorr)  sign function.
+    #[doc = include_str!("../../../docs/schnorr/primitive-sign.md")]
     pub fn sign<R: CryptoRng + RngCore>(
         key_pair: (Scalar, AffinePoint),
         msg: Base,
@@ -59,8 +59,8 @@ impl Schnorr {
     }
 
     /// Schnorr verify signature.
-    /// See [Schnorr signature scheme verify function](crate::signatures::primitive::schnorr).
-    #[doc = include_str!("../../../docs/schnorr/schnorr_primitive_verify.md")]
+    /// See [Schnorr signature scheme](crate::signatures::primitive::schnorr) verify function.
+    #[doc = include_str!("../../../docs/schnorr/primitive-verify.md")]
     pub fn verify(msg: Base, pk: AffinePoint, sig: SchnorrSig) -> Result<(), Error> {
         let input_hash = [
             *sig.0.coordinates().unwrap().x(),
