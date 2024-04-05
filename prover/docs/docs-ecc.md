@@ -1,4 +1,18 @@
 # ECC Preliminaries
+## Basic ECC Toolbox
+- $p$: a large prime number.
+- $\mathbb{F}_p$: Finite field over prime $p$.
+- $E(\mathbb{F}_p)$: elliptic curve defined over $\mathbb{F}_p$.
+- $P = (x, y)$ is a point on $E(\mathbb{F}_p)$.
+- Elliptic curve scalar multiplication:
+    - Let $n \leftarrow \mathbb{Z}_p$,
+    - Let $P$ be a point on $E(\mathbb{F}_p)$,
+    - $Q = n \cdot P$ is a point on $E(\mathbb{F}_p)$.
+- Elliptic curve discrete logarithm problem:
+    - Let $P$ and $Q$ be points on $E(\mathbb{F}_p)$ and $Q = n \cdot P$.
+    - Knowing $P$ and $Q$, finding $n = \log_P^Q$ is a hard problem.
+- Base point: Let $G$ be a base point, then $G$ generates all points at $E(\mathbb{F}_p)$.
+
 ## Twisted Edward's Curve
 Let $\mathbb{F}_p$ be a field where $p$ is a large prime. The twisted Edward's curve is defined as follows:
 
