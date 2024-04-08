@@ -1,4 +1,4 @@
-We implement a gate that verifies the validity of an ATMS signature given the threshold and public key commitment as Public Inputs.
+Ad-hoc Threshold Multi-signatures
 
 # ATMS: _Ad-hoc Threshold Multi-signatures_
 * Properties from multi-signatures and threshold signatures.

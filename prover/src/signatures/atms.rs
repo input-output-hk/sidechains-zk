@@ -1,3 +1,8 @@
+//! ATMS verifier.
+//!
+//! We implement a gate that verifies the validity of an ATMS signature given the threshold and public key commitment as Public Inputs.
+
+#![doc = include_str!("../../docs/atms/primitive.md")]
 #![doc = include_str!("../../docs/atms/example.md")]
 
 use crate::ecc::chip::{AssignedEccPoint, EccChip, EccConfig, EccInstructions};
@@ -52,7 +57,7 @@ impl AtmsVerifierGate {
 
     /// ATMS verifier instruction.
     ///
-    #[doc = include_str!("../../docs/atms/notes.md")]
+    #[doc = include_str!("../../docs/atms/gate-verifier.md")]
     pub fn verify(
         &self,
         ctx: &mut RegionCtx<'_, Base>,

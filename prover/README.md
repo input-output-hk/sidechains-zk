@@ -65,16 +65,7 @@ and then build the header file by running the following command from the parent 
 rustup run nightly cbindgen ./ --config cbindgen.toml --crate atms-halo2 --output target/include/atms_halo2.h
 ```
 
-## Running C tests
-
-We first build the test executable:
-
-``` sh
-gcc -Wl,-dead_strip c-tests/atms_halo2.c -g -o test -L ./target/release -latms_halo2 -lstdc++
-```
-
-then simply run the tests:
-
-```shell
-./test
-```
+## Documentation
+- Elliptic curve cryptography preliminaries: [ECC][crate::ecc::documentation]
+- Schnorr signature: [Schnorr][crate::signatures::primitive::documentation]
+- Ad-hoc threshold multi-signature: [ATMS][crate::signatures::documentation]

@@ -1,4 +1,12 @@
-#![doc = include_str!("../../../docs/schnorr/notes-primitive.md")]
+//! Primitive functionality of Schnorr signature.
+//! - Key generation
+//! - Signing
+//! - Signature verification
+//! - test
+//!
+//! Visit [Documentation][crate::signatures::primitive::documentation] for the
+//! algorithm explanation.
+
 use crate::rescue::{RescueParametersBls, RescueSponge};
 use crate::signatures::schnorr::SchnorrSig;
 use ff::Field;
@@ -31,7 +39,7 @@ impl Schnorr {
 
     // probabilistic function. We can make this deterministic using EdDSA instead.
     /// Schnorr signature generation.
-    /// See Schnorr signature scheme [sign](crate::signatures::primitive::schnorr#sign) algorithm.
+    /// See Schnorr signature scheme [$sign$][crate::signatures::primitive::documentation#sign] algorithm.
     #[doc = include_str!("../../../docs/schnorr/primitive-sign.md")]
     pub fn sign<R: CryptoRng + RngCore>(
         key_pair: (Scalar, AffinePoint),
@@ -59,7 +67,7 @@ impl Schnorr {
     }
 
     /// Schnorr verify signature.
-    /// See Schnorr signature scheme [verify](crate::signatures::primitive::schnorr#verify) algorithm.
+    /// See Schnorr signature scheme [$verify$](crate::signatures::primitive::documentation#verify) algorithm.
     #[doc = include_str!("../../../docs/schnorr/primitive-verify.md")]
     pub fn verify(msg: Base, pk: AffinePoint, sig: SchnorrSig) -> Result<(), Error> {
         let input_hash = [

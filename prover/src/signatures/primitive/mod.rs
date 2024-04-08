@@ -1,4 +1,6 @@
-//! Primitive Schnorr signature functionality.
+//! Schnorr signature implementation.
 
-// #![doc = include_str!("../../../docs/schnorr/notes-primitive.md")]
 pub mod schnorr;
+
+#[doc = include_str!("../../../docs/schnorr/notes-primitive.md")]
+pub mod documentation {}

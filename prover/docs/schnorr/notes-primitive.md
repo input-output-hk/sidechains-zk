@@ -1,5 +1,5 @@
 # Schnorr Signature
-See [ECC toolbox][crate::ecc::documentation#asic-ecc-toolbox].
+See [ECC toolbox][crate::ecc::documentation#basic-ecc-toolbox].
 
 A Schnorr signature consists of the following functions:
 ## $keygen$ 
@@ -8,7 +8,7 @@ A Schnorr signature consists of the following functions:
   * **Algorithm**:
     * Choose a random scalar as the private key: $sk \leftarrow \mathbb{Z}_p$,
     * Compute the public key: $pk \leftarrow sk \cdot G$,
-    * Return (sk, pk). 
+    * Return $(sk, pk)$. 
 ## $sign$
   * **Input**: Keypair $(sk, pk)$, message $m$.
   * **Output**: Signature $\sigma = (R, s)$.
