@@ -69,3 +69,5 @@ rustup run nightly cbindgen ./ --config cbindgen.toml --crate atms-halo2 --outpu
 - Elliptic curve cryptography preliminaries: [ECC][crate::ecc::documentation]
 - Schnorr signature: [Schnorr][crate::signatures::primitive::documentation]
 - Ad-hoc threshold multi-signature: [ATMS][crate::signatures::documentation]
+- Rescue sponge hash function: [Rescue][crate::rescue::documentation]
+- I/O specs and encoding: [I/O][crate::encoding::documentation]

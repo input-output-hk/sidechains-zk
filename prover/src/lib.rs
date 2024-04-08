@@ -17,6 +17,7 @@ pub mod signatures;
 mod c_api;
 mod proof;
 pub mod util;
+pub mod encoding;
 
 /// AssignedValue
 pub type AssignedValue<F> = AssignedCell<F, F>;
