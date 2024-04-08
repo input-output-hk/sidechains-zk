@@ -1,52 +1,11 @@
  # SNARK-based ATMS
- Circuit implementation for ATMS verification. The goal of this library
- is to provide a proof-of-concept implementation of a circuit to provide a
- proof that there exists `t` valid signatures of some subset of a given
- set of public keys. This is the first effort of implementing a SNARK-based
- Ad-hoc Threshold Multi Signature scheme.
+This is the circuit implementation for [Ad-hoc Threshold MultiSignatures (ATMS)](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=8835275).
+The goal of this library is to provide a proof-of-concept implementation of a circuit to provide a proof that there exists `t` valid signatures of some subset of a given set of public keys. 
+This is the first effort of implementing a SNARK-based Ad-hoc Threshold Multi Signature scheme.
 
- The Zero Knowledge Proving system we'll use is Plonk with KZG commitments. We
- will use curve BLS12-381. Therefore, to implement in-circuit Elliptic Curve
- operations, we will use JubJub, which is an elliptic curve defined over the
- Scalar field of BLS12-381, aka its 'embedded' curve. This enables what is sometimes
- referred to as SNARK-friendly signature schemes. In particular, EdDSA over the
- JubJub curve. As a SNARK-friendly hash algorithm we use Poseidon252, both for
- the signature generation/verification as for the Merkle Tree commitments.
-
- ## Committee participation
- The committee and signature generation precedes the proof creation. Each
- committee member needs to participate in a registration procedure, during
- which they share their EdDSA public keys (a JubJub compressed point) with
- the Registration Authority. The role of the registration authority is simply
- to commit to all public keys of the committee in a Merkle Tree (MT). This means
- that the role of the Registration Authority can be a Plutus script, a trusted
- party, or be distributed amongst the committee members. The reason why it
- needs to be 'trusted' is because it can exclude certain participants, or
- include several keys it owns.
-
- Once all registration requests have been submitted with their corresponding
- public keys, `pks = [pk_1, ..., pk_n]`, the aggregated public key is created
- `avk = MT::commit(&pks)`. This value will be used as a public input for the
- SNARK verification. This finalises the registration phase.
-
- The signature phase simply consists in at least `t > n/2` (or whatever
- threshold is defined) signers produce valid signatures `sig_1, ..., sig_t`.
- These signatures are then sent to the aggregator to create the ZKP. The
- role of the aggregator is simply to serve as a facilitator, and is not
- required to be trusted. Anyone can aggregate the signatures into a ZKP.
-
- ## Circuit
- In this section we describe what is the statement that will be proven in
- the Zero Knowledge Proof (ZKP).
-
- Once the aggregator receives at least `t` valid signatures `sig_1, ..., sig_t`
- it proceeds to generate the SNARK. In particular, it proves that:
- * There exists `t'` valid and distinct signatures, `sig_1, ..., sig_t'` for
-   public keys `pk_1, ..., pk_t'` and message `m` (public input maybe?).
- * There exists a valid merkle proof for each distinct public key `pk_1, ..., pk_t'`
-   wrt to merkle root `pks` (which is given as public input)
- * `t'> t`, for `t` global parameter defining the threshold (probably a constant
-   in the circuit)
+* The Zero Knowledge Proving system is implemented with PLONK with KZG commitments.
+* BLS12-381 curve is used. Therefore, in-circuit elliptic curve operations are implemented with JubJub, which is an elliptic curve defined over the Scalar field of BLS12-381, aka its 'embedded' curve. This enables what is sometimes referred to as SNARK-friendly signature schemes. In particular, EdDSA over the JubJub curve. 
+* As a SNARK-friendly hash algorithm we use Rescue, both for the signature generation/verification as for the Merkle Tree commitments.
 
 ## Compiling the library and header file
 First, one needs to compile the library running:
@@ -66,8 +25,11 @@ rustup run nightly cbindgen ./ --config cbindgen.toml --crate atms-halo2 --outpu
 ```
 
 ## Documentation
-- Elliptic curve cryptography preliminaries: [ECC][crate::ecc::documentation]
-- Schnorr signature: [Schnorr][crate::signatures::primitive::documentation]
-- Ad-hoc threshold multi-signature: [ATMS][crate::signatures::documentation]
-- Rescue sponge hash function: [Rescue][crate::rescue::documentation]
-- I/O specs and encoding: [I/O][crate::encoding::documentation]
+The library provides a documentation for ATMS functionality. $\rightarrow$ [Documentation][crate::docs].
+
+You can also jump to following sections from following links: 
+- Elliptic curve cryptography preliminaries: [ECC][crate::docs::ecc]
+- Schnorr signature: [Schnorr][crate::docs::schnorr]
+- Ad-hoc threshold multi-signature: [ATMS][crate::docs::atms]
+- Rescue sponge hash function: [Rescue][crate::docs::rescue]
+- I/O specs and encoding: [I/O][crate::docs::encoding]

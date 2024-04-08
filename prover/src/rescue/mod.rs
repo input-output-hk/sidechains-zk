@@ -5,9 +5,6 @@ mod rescue_counter_mode;
 mod rescue_crhf_gate;
 mod rescue_perm_gate;
 
-#[doc = include_str!("../../docs/docs-rescue.md")]
-pub mod documentation {}
-
 #[cfg(test)]
 mod test_vectors;
 

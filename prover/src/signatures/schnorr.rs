@@ -1,6 +1,6 @@
 //! Schnorr signature verification
 //!
-//! See [documentation][crate::signatures::primitive::documentation] of Schnorr signature.
+//! See [documentation][crate::docs::schnorr] of Schnorr signature.
 
 use crate::ecc::chip::{AssignedEccPoint, EccChip, EccConfig, EccInstructions, ScalarVar};
 use crate::instructions::{MainGateInstructions, Term};
@@ -88,9 +88,9 @@ impl SchnorrVerifierGate {
     }
 
     /// Schnorr verifier instruction.
-    /// See [$verify$][crate::signatures::primitive::documentation#verify] of Schnorr signature
+    /// See [$verify$][crate::docs::schnorr#verify] of Schnorr signature
     /// and its [implementation][crate::signatures::primitive::schnorr::Schnorr::verify()].
-    #[doc = include_str!("../../docs/schnorr/gate-verify.md")]
+    #[doc = include_str!("../../docs/signatures/schnorr/gate-verify.md")]
     pub fn verify(
         &self,
         ctx: &mut RegionCtx<'_, Base>,
