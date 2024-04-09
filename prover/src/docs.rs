@@ -14,3 +14,6 @@ pub mod rescue {}
 
 #[doc = include_str!("../docs/docs-encoding-io.md")]
 pub mod encoding_io {}
+
+#[doc = include_str!("../docs/flow.md")]
+pub mod flow {}

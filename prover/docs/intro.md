@@ -59,4 +59,4 @@ This section includes the basic primitives of elliptic curve cryptography requir
   * We give a brief introduction to [ATMS][crate::docs::atms#atms-ad-hoc-threshold-multi-signatures] and explained the [SNARK-based ATMS with Schnorr setup][crate::docs::atms#snark-based-atms-with-schnorr-setup].
 * **Rescue sponge:** [Rescue][crate::docs::rescue]
 * **Encoding and I/O:** [Encoding and I/O][crate::docs::encoding_io]
-* **Flow:** 
+* **Flow:** [Flow][crate::docs::flow]
