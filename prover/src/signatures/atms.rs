@@ -2,7 +2,6 @@
 //!
 //! We implement a gate that verifies the validity of an ATMS signature given the threshold and public key commitment as Public Inputs.
 
-#![doc = include_str!("../../docs/signatures/atms/primitive.md")]
 #![doc = include_str!("../../docs/signatures/atms/example.md")]
 
 use crate::ecc::chip::{AssignedEccPoint, EccChip, EccConfig, EccInstructions};

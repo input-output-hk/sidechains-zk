@@ -1,50 +1,62 @@
-Circuit implementation for ATMS verification. 
+Library documentation.
 
-The goal of this library
-is to provide a proof-of-concept implementation of a circuit to provide a
-proof that there exists `t` valid signatures of some subset of a given
-set of public keys. This is the first effort of implementing a SNARK-based
-Ad-hoc Threshold Multi Signature scheme.
+# Ad-hoc Threshold MultiSignatures - ATMS
+ATMS is a multisignature scheme that allows key-pair owners to create a threshold signature without having a complex distributed key generation (ad-hoc), or interactive signature procedure (multisignature).
+The original paper [Proof-of-Stake Sidechains](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=8835275) by Gazi, Kiayias, and Zindros proposes the following ways to construct ATMS:
+1. **Trivial ATMS:**
+   * Aggregates at least a threshold number of individual signatures.
+   * Individual signatures are verified individually.
+   * Easy construction.
+   * Not efficient in terms of signature sizes and verification.
 
-The Zero Knowledge Proving system we'll use is Plonk with KZG commitments. We
-will use curve BLS12-381. Therefore, to implement in-circuit Elliptic Curve
-operations, we will use JubJub, which is an elliptic curve defined over the
-Scalar field of BLS12-381, aka its 'embedded' curve. This enables what is sometimes
-referred to as SNARK-friendly signature schemes. In particular, EdDSA over the
-JubJub curve. As a SNARK-friendly hash algorithm we use Poseidon252, both for
-the signature generation/verification as for the Merkle Tree commitments.
+2. **Pairing based ATMS:**
+   * Tradeoff between feasibility and ease of implementation.
+   * Provides the most efficient signature and verification but only in the optimistic case where all committee members participate in the signature.
+   * When committee size grows, it is hard to achieve the case where all members participate.
 
-## Committee participation
-The committee and signature generation precedes the proof creation. Each
-committee member needs to participate in a registration procedure, during
-which they share their EdDSA public keys (a JubJub compressed point) with
-the Registration Authority. The role of the registration authority is simply
-to commit to all public keys of the committee in a Merkle Tree (MT). This means
-that the role of the Registration Authority can be a Plutus script, a trusted
-party, or be distributed amongst the committee members. The reason why it
-needs to be 'trusted' is because it can exclude certain participants, or
-include several keys it owns.
+3. **SNARK-based ATMS:**
+   * Most efficient signature sizes and verifier independent of participation.
+   * The downside of such an option is the implementation complexity.
 
-Once all registration requests have been submitted with their corresponding
-public keys, `pks = [pk_1, ..., pk_n]`, the aggregated public key is created
-`avk = MT::commit(&pks)`. This value will be used as a public input for the
-SNARK verification. This finalises the registration phase.
+We will focus on a **SNARK-based ATMS**, and we specify exactly how we plan on instantiating such a construction.
 
-The signature phase simply consists in at least `t > n/2` (or whatever
-threshold is defined) signers produce valid signatures `sig_1, ..., sig_t`.
-These signatures are then sent to the aggregator to create the ZKP. The
-role of the aggregator is simply to serve as a facilitator, and is not
-required to be trusted. Anyone can aggregate the signatures into a ZKP.
+## SNARK-friendly primitives
+* Modern zero knowledge proofs allow a prover to convince a verifier about the correctness of any _NP-statement_.
+  * Prover cost is proportional to the complexity of the statement,
+  * To improve the prover complexity choose carefully:
+    * The statement to be proven, and/or
+    * The primitives to be used.
+* The flexibility of the sidechains design allows us to choose the cryptographic primitives which provide a more efficient prover.
+* The ultimate goal is to verify such proofs in Cardano main-net. Therefore, the design decision is made considering this.
 
-## Circuit
-In this section we describe what is the statement that will be proven in
-the Zero Knowledge Proof (ZKP).
+1. **Parent curve:**
+   * The curve that we have available in Plutus (or rather, will have available) is **BLS12-381**.
+   * Therefore, BLS12-381 is used as the parent curve and the rest of the primitives are conditioned by the parent curve.
+2. **Embedded curve:**
+   * We use the **JubJub** curve, which is an elliptic curve that has as the base field, the scalar field of BLS12-381, i.e. it's an embedded curve.
+   * This allows for efficient EC operations within the proof.
+3. **Digital signature scheme:**
+   * JubJub is an edwards curve with a cofactor of 8,
+   * So, the selected digital signature algorithm we choose is **Schnorr**.
+4. **Hash algorithm:**
+   * For both signing and Merkle tree commitments we need a SNARK friendly hash function.
+   * We used **Rescue** hash function which is instantiated over the base field of BLS12-381.
+5. **Proof system:**
+   * **Plonk with KZG commitments** scheme provides a universal SNARK (meaning that we can use some existing trusted setup) which is sufficiently succinct to be verified on main-net.
+   * In particular, we use **Halo2** implementation.
 
-Once the aggregator receives at least `t` valid signatures `sig_1, ..., sig_t`
-it proceeds to generate the SNARK. In particular, it proves that:
-* There exists `t'` valid and distinct signatures, `sig_1, ..., sig_t'` for
-  public keys `pk_1, ..., pk_t'` and message `m` (public input maybe?).
-* There exists a valid merkle proof for each distinct public key `pk_1, ..., pk_t'`
-  wrt to merkle root `pks` (which is given as public input)
-* `t'> t`, for `t` global parameter defining the threshold (probably a constant
-  in the circuit)
+## Roadmap
+The structure of the documentation is designed as following:
+* **ECC preliminaries:**
+This section includes the basic primitives of elliptic curve cryptography required by the ATMS implementation.
+  - We provide an introductory level [ECC toolbox][crate::docs::ecc#basic-ecc-toolbox].
+  - Followed by the [EdDSA][crate::docs::ecc#edwards-curve-digital-signature-algorithm-eddsa].
+  - [BLS12-381][crate::docs::ecc#curve-setting] and [pairings][crate::docs::ecc#pairing] are explained briefly.
+  - Lastly, we give the specs of [JubJub][crate::docs::ecc#jubjub] curve.
+* **Schnorr signature:** 
+  * Key generation, signing, and verification algorithms of Schnorr signature is given in [here][crate::docs::schnorr].
+* **ATMS:** 
+  * We give a brief introduction to [ATMS][crate::docs::atms#atms-ad-hoc-threshold-multi-signatures] and explained the [SNARK-based ATMS with Schnorr setup][crate::docs::atms#snark-based-atms-with-schnorr-setup].
+* **Rescue sponge:**
+* **Encoding and I/O:**
+* **Flow:** 
