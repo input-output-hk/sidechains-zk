@@ -159,7 +159,7 @@ pub trait EccInstructions<C: CurveAffine>: Chip<C::Base> + Clone + Debug {
     /// Variable representing a scalar used in variable-base scalar mul.
     ///
     /// This type is treated as a full-width scalar. However, if `Self` implements
-    /// [`BaseFitsInScalarInstructions`] then this may also be constructed from an element
+    /// \[`BaseFitsInScalarInstructions`\] then this may also be constructed from an element
     /// of the base field.
     type ScalarVar: Clone + Debug;
     /// Variable representing an elliptic curve point.
@@ -223,30 +223,30 @@ pub trait EccInstructions<C: CurveAffine>: Chip<C::Base> + Clone + Debug {
         base: &Self::Point,
     ) -> Result<Self::Point, Error>;
 
-    /// Given three EC points A1, A2, A3 and two bits b0, b1, this function returns
-    /// A{b0 + 2*b1}, with A0 being the identity point.
-    ///
-    /// let (x, y) be the output coordinates. It is easy to see that
-    ///
-    /// x = b0 * (1 - b1) * x_1 + (1 - b0) * b1 * x_2 + b0 * b1 * x3
-    ///   = x1 * b0 + x2 * b1 + (x3 - x2 - x1) * b0 * b1
-    /// and,
-    ///
-    /// y = (1 - b0) * (1 - b1) + b0 * (1 - b1) * y1 + (1 - b0) * b1 * y2 + b0 * b1 * y3
-    ///   = (y1 - 1) * b0 + (y2 - 1) * b1 + (y3 - y2 - y1 + 1) * b0 * b1 + 1
-    ///
-    /// We note that this function is used for fixed-based multiplication. This means that
-    /// everytime this function is used, A1, A2 and A3 are public values (and, by consequence,
-    /// their corresponding coordinates). This means that we can achieve this with the following
-    /// two constraints:
-    ///
-    ///                  q_1 * b0 + q2 * b1 + q_m * b0 * b1 = q_O * x
-    ///
-    /// with q_1 = x1, q_2 = x2, q_m = x3 - x2 - x1, and q_O = 1, and:
-    ///
-    ///               q_1 * b0 + q_2 * b1 + q_m * b0 * b1 + q_C = q_O * y
-    ///
-    /// with q_1 = y1 - 1, q_2 = y_2 - 1, q_M = y3 - y2 - y1 + 1, and q_O = q_C = 1.
+    // Given three EC points A1, A2, A3 and two bits b0, b1, this function returns
+    // A{b0 + 2*b1}, with A0 being the identity point.
+    //
+    // let (x, y) be the output coordinates. It is easy to see that
+    //
+    // x = b0 * (1 - b1) * x_1 + (1 - b0) * b1 * x_2 + b0 * b1 * x3
+    //   = x1 * b0 + x2 * b1 + (x3 - x2 - x1) * b0 * b1
+    // and,
+    //
+    // y = (1 - b0) * (1 - b1) + b0 * (1 - b1) * y1 + (1 - b0) * b1 * y2 + b0 * b1 * y3
+    //   = (y1 - 1) * b0 + (y2 - 1) * b1 + (y3 - y2 - y1 + 1) * b0 * b1 + 1
+    //
+    // We note that this function is used for fixed-based multiplication. This means that
+    // everytime this function is used, A1, A2 and A3 are public values (and, by consequence,
+    // their corresponding coordinates). This means that we can achieve this with the following
+    // two constraints:
+    //
+    //                  q_1 * b0 + q2 * b1 + q_m * b0 * b1 = q_O * x
+    //
+    // with q_1 = x1, q_2 = x2, q_m = x3 - x2 - x1, and q_O = 1, and:
+    //
+    //               q_1 * b0 + q_2 * b1 + q_m * b0 * b1 + q_C = q_O * y
+    //
+    // with q_1 = y1 - 1, q_2 = y_2 - 1, q_M = y3 - y2 - y1 + 1, and q_O = q_C = 1.
     fn point_selection(
         &self,
         ctx: &mut RegionCtx<'_, C::Base>,

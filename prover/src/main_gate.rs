@@ -1,6 +1,6 @@
-//! The `main_gate` is a five width standard like PLONK gate
-//! that constrains the equation below:
+//! The `main_gate` is a five width standard like PLONK gate.
 //!
+//! The `main_gate` constrains the equation below:
 //! q_a * a + q_b * b + q_c * c + q_d * d + q_e * e +
 //! q_mul_ab * a * b +
 //! q_mul_cd * c * d +
@@ -572,7 +572,7 @@ impl<F: PrimeField> MainGate<F> {
     pub fn new(config: MainGateConfig) -> Self {
         MainGate {
             config,
-            _marker: PhantomData::default(),
+            _marker: PhantomData,
         }
     }
 

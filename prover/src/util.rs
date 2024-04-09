@@ -1,3 +1,5 @@
+//! Utilities for numeric operations.
+
 use ff::PrimeField;
 use halo2_proofs::plonk::Instance;
 use halo2_proofs::{

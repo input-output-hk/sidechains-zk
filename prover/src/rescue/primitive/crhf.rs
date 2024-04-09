@@ -93,7 +93,7 @@ where
     F: PrimeField,
     RP: RescueParameters<F>,
 {
-    /// Hash function based on a rescue sponge. It maps F^* -> F. Takes as input a slice &[F] encoding
+    /// Hash function based on a rescue sponge. It maps F^* -> F. Takes as input a slice &\[F\] encoding_io
     /// the input and an optional padding function and outputs a single field element as the
     /// digest.
     pub fn hash(input: &[F], pad: Option<PaddingFunction<F>>) -> F {

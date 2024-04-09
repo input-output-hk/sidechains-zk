@@ -1,3 +1,12 @@
+//! Primitive functionality of Schnorr signature.
+//! - Key generation
+//! - Signing
+//! - Signature verification
+//! - test
+//!
+//! Visit [Documentation][crate::docs::schnorr] for the
+//! algorithm explanation.
+
 use crate::rescue::{RescueParametersBls, RescueSponge};
 use crate::signatures::schnorr::SchnorrSig;
 use ff::Field;
@@ -16,6 +25,13 @@ fn generator() -> ExtendedPoint {
 }
 
 impl Schnorr {
+    /// Key generation for a Schnorr signer.
+    /// See Schnorr signature scheme [$keygen$][crate::docs::schnorr#keygen] algorithm.
+    ///
+    /// Select a random `scalar` as the secret key of the signer. It is an element of the scalar
+    /// field of `jubjub` curve.
+    /// Compute the public key as an affine elliptic curve point. $sk \cdot G$.
+    /// Return the key pair `(sk, pk)`.
     pub fn keygen<R: CryptoRng + RngCore>(rng: &mut R) -> (Scalar, AffinePoint) {
         let sk = Scalar::random(rng);
         let pk = generator().mul(sk).to_affine();
@@ -24,6 +40,9 @@ impl Schnorr {
     }
 
     // probabilistic function. We can make this deterministic using EdDSA instead.
+    /// Schnorr signature generation.
+    /// See Schnorr signature scheme [$sign$][crate::docs::schnorr#sign] algorithm.
+    #[doc = include_str!("../../../docs/signatures/schnorr/primitive-sign.md")]
     pub fn sign<R: CryptoRng + RngCore>(
         key_pair: (Scalar, AffinePoint),
         msg: Base,
@@ -46,10 +65,12 @@ impl Schnorr {
         let reduced_challenge = Scalar::from_bytes_wide(&wide_bytes);
 
         let response = k + reduced_challenge * key_pair.0;
-
         (announcement, response)
     }
 
+    /// Schnorr verify signature.
+    /// See Schnorr signature scheme [$verify$](crate::docs::schnorr#verify) algorithm.
+    #[doc = include_str!("../../../docs/signatures/schnorr/primitive-verify.md")]
     pub fn verify(msg: Base, pk: AffinePoint, sig: SchnorrSig) -> Result<(), Error> {
         let input_hash = [
             *sig.0.coordinates().unwrap().x(),
@@ -67,7 +88,7 @@ impl Schnorr {
         if generator().mul(sig.1) == sig.0.add(pk.mul(reduced_challenge).to_affine()) {
             Ok(())
         } else {
-            Err(Error::default())
+            Err(Error)
         }
     }
 }

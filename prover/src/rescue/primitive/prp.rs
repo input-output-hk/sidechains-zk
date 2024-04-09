@@ -46,7 +46,7 @@ where
 
     /// Returns a new instantiation of a rescue permutation for some given key.
     /// If a key is given it caches the key scheduling constants, otherwise
-    /// it uses the round constants for the fixed key [0,0,0,0]
+    /// it uses the round constants for the fixed key \[0,0,0,0\]
     fn new(key: Option<RescueState<F>>) -> Self {
         if let Some(key) = key {
             Self {

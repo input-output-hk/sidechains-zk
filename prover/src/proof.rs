@@ -27,7 +27,7 @@ pub fn prove(pks: &[EdDsaPk], sigs: &[EdDsaSig], _avk: &MtCommitment) -> Result<
         return Ok(());
     }
 
-    Err(Error::default())
+    Err(Error)
 }
 
 #[cfg(test)]
