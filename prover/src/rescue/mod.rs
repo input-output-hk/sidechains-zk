@@ -1,4 +1,6 @@
 //! Modules for the rescue hash function.
+//!
+//! See the documentation of [Rescue Hash][crate::docs::rescue].
 
 mod primitive;
 mod rescue_counter_mode;

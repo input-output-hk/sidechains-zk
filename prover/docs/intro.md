@@ -57,6 +57,10 @@ This section includes the basic primitives of elliptic curve cryptography requir
   * Key generation, signing, and verification algorithms of Schnorr signature is given in [here][crate::docs::schnorr].
 * **ATMS:** 
   * We give a brief introduction to [ATMS][crate::docs::atms#atms-ad-hoc-threshold-multi-signatures] and explained the [SNARK-based ATMS with Schnorr setup][crate::docs::atms#snark-based-atms-with-schnorr-setup].
-* **Rescue sponge:** [Rescue][crate::docs::rescue]
-* **Encoding and I/O:** [Encoding and I/O][crate::docs::encoding_io]
-* **Flow:** [Flow][crate::docs::flow]
+* **Rescue sponge:** Rescue prime and Sponge function are explained [here][crate::docs::rescue].
+* **Encoding and I/O:** 
+This [section][crate::docs::encoding_io] contains commonly used types and structs in the library, input and output fields of the crucial functions, and encodings of the field elements.
+  * [Commonly used types and structs][crate::docs::encoding_io#commonly-used-types-and-structs]
+  * [Functions: I/O][crate::docs::encoding_io#functions-io]
+  * [Encoding][crate::docs::encoding_io#encoding]
+* **Flow:** Here we explained the generic [flow][crate::docs::flow] of the functionality.

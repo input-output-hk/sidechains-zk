@@ -27,8 +27,8 @@ pub type AssignedSchnorrSignature = (AssignedEccPoint, ScalarVar);
 /// Type of a Schnorr Signature
 ///
 /// Schnorr signature consists of
-/// - An affine point on jubjub curve: [AffinePoint]
-/// - A [Scalar] which is an element of the scalar field $\mathbb{F}_r$ of the Jubjub curve.
+/// - An affine point on jubjub curve: [AffinePoint][crate::docs::encoding_io#type-affinepoint]
+/// - A [Scalar][crate::docs::encoding_io#type-scalar] which is an element of the scalar field $\mathbb{F}_r$ of the Jubjub curve.
 pub type SchnorrSig = (AffinePoint, Scalar);
 
 /// Configuration for SchnorrVerifierGate
@@ -315,7 +315,8 @@ impl SchnorrVerifierGate {
 
     /// Assign a schnorr signature
     ///
-    /// Assign the [AffinePoint] and [Scalar] of the Schnorr signature
+    /// Assign the [AffinePoint][crate::docs::encoding_io#type-affinepoint] and
+    /// [Scalar][crate::docs::encoding_io#type-scalar] of the Schnorr signature
     /// to [witness_point][crate::ecc::chip::EccChip::witness_point()]
     /// and [witness_scalar_var][crate::ecc::chip::EccChip::witness_scalar_var()] respectively to the `ecc_gate`.
     pub fn assign_sig(

@@ -1,6 +1,8 @@
 //! ATMS verifier.
 //!
 //! We implement a gate that verifies the validity of an ATMS signature given the threshold and public key commitment as Public Inputs.
+//!
+//! Background for SNARK-based ATMS with Schnorr setup can be found [here][crate::docs::atms].
 
 #![doc = include_str!("../../docs/signatures/atms/example.md")]
 

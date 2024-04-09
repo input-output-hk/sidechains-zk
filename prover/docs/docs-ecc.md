@@ -1,4 +1,12 @@
 # ECC Preliminaries
+This module includes a brief explanation of the elliptic curve cryptography primitives used in the library.
+- [Basic ECC Toolbox][crate::docs::ecc#basic-ecc-toolbox]
+- [Twisted Edward's Curve][crate::docs::ecc#twisted-edwards-curve]
+  - [EdDSA][crate::docs::ecc#eddsa---edwards-curve-digital-signature-algorithm]
+- [BLS12-381][crate::docs::ecc#bls12-381]
+  - [Pairings][crate::docs::ecc#pairing]
+- [Jubjub][crate::docs::ecc#jubjub]
+
 ## Basic ECC Toolbox
 - $p$: a large prime number.
 - $\mathbb{F}_p$: Finite field over prime $p$.
@@ -32,7 +40,7 @@ where $a, d \in \mathbb{F}_p$ and non-zero.
 $$(x_3, y_3) = \Bigg(\frac{x_1y_2 + y_1x_2}{1 + dx_1x_2y_1y_2}, \frac{y_1y_2 - ax_1x_2}{1 - dx_1x_2y_1y_2}\Bigg).$$
 
 
-### Edward's Curve Digital Signature Algorithm (EdDSA)
+### EdDSA - (Edward's Curve Digital Signature Algorithm)
 Let $B$ be the base point of $E_{E, a, d}$ with order $l$ and $H$ be a hash function with $2b-$bit output size where $2^{b-1} > p$.
 * $keygen$
     * **Input**: Security parameter $\lambda$.

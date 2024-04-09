@@ -1,5 +1,10 @@
 Encoding and I/O requirements.
 
+This module includes the following:
+- [Commonly used types and structs][crate::docs::encoding_io#commonly-used-types-and-structs]
+- [Functions: I/O][crate::docs::encoding_io#functions-io]
+- [Encoding][crate::docs::encoding_io#encoding]
+
 # Commonly used types and structs
 ## Type Base
 Represents an element of the base field $\mathbb{F}_q$ of the Jubjub elliptic curve construction.
