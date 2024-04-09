@@ -12,5 +12,5 @@ pub mod schnorr {}
 #[doc = include_str!("../docs/docs-rescue.md")]
 pub mod rescue {}
 
-#[doc = include_str!("../docs/docs-encoding.md")]
-pub mod encoding {}
+#[doc = include_str!("../docs/docs-encoding-io.md")]
+pub mod encoding_io {}

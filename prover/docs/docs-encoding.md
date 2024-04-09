@@ -1,1 +1,0 @@
-Encoding and I/O requirements.

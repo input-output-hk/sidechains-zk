@@ -32,4 +32,4 @@ You can also jump to following sections from following links:
 - Schnorr signature: [Schnorr][crate::docs::schnorr]
 - Ad-hoc threshold multi-signature: [ATMS][crate::docs::atms]
 - Rescue sponge hash function: [Rescue][crate::docs::rescue]
-- I/O specs and encoding: [I/O][crate::docs::encoding]
+- I/O specs and encoding: [I/O][crate::docs::encoding_io]

@@ -28,7 +28,7 @@ pub(crate) type StateVectorsMatrix<F> = [RescueState<F>; N_CONSTS];
 /// them. The exponentiation s-box always has value 5 for our choice of fields and is
 /// hardcoded in the main gate implementation.
 pub trait RescueParameters<F: PrimeField>: Default {
-    /// parameter 5^-1 (mod p - 1) in little endian encoding where p is the modulus of the base
+    /// parameter 5^-1 (mod p - 1) in little endian encoding_io where p is the modulus of the base
     /// field over which the curve is defined
     const A_INV: EEncoding;
     /// MDS matrix
