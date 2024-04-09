@@ -40,6 +40,10 @@ We will focus on a **SNARK-based ATMS**, and we specify exactly how we plan on i
    * So, the selected digital signature algorithm we choose is **Schnorr**.
 4. **Hash algorithm:**
    * For both signing and Merkle tree commitments we need a SNARK friendly hash function.
+   > _Note that, there is no need of a merkle tree inside a SNARK, with a hash it is sufficient._ 
+   > _Having merkle tree does not save up anything inside a SNARK._ 
+   > _The identifier of the committee would be a hash of all their public keys, not necessarily a merkle tree._ 
+   > _So basically, `avk = H(pk_1, pk_2, ..., pk_n)`, and then inside the circuit you prove that the key does indeed belong to the set by hashing it with other keys._
    * We used **Rescue** hash function which is instantiated over the base field of BLS12-381.
 5. **Proof system:**
    * **Plonk with KZG commitments** scheme provides a universal SNARK (meaning that we can use some existing trusted setup) which is sufficiently succinct to be verified on main-net.
@@ -48,19 +52,26 @@ We will focus on a **SNARK-based ATMS**, and we specify exactly how we plan on i
 ## Roadmap
 The structure of the documentation is designed as following:
 * **ECC preliminaries:**
-This section includes the basic primitives of elliptic curve cryptography required by the ATMS implementation.
-  - We provide an introductory level [ECC toolbox][crate::docs::ecc#basic-ecc-toolbox].
-  - Followed by the [EdDSA][crate::docs::ecc#edwards-curve-digital-signature-algorithm-eddsa].
-  - [BLS12-381][crate::docs::ecc#curve-setting] and [pairings][crate::docs::ecc#pairing] are explained briefly.
-  - Lastly, we give the specs of [JubJub][crate::docs::ecc#jubjub] curve.
+  * This [section][crate::docs::ecc] includes the basic primitives of elliptic curve cryptography required by the ATMS implementation.
+    - We provide an introductory level [ECC toolbox][crate::docs::ecc#basic-ecc-toolbox].
+    - Followed by the [EdDSA][crate::docs::ecc#edwards-curve-digital-signature-algorithm-eddsa].
+    - [BLS12-381][crate::docs::ecc#curve-setting] and [pairings][crate::docs::ecc#pairing] are explained briefly.
+    - Lastly, we give the specs of [JubJub][crate::docs::ecc#jubjub] curve.
 * **Schnorr signature:** 
   * Key generation, signing, and verification algorithms of Schnorr signature is given in [here][crate::docs::schnorr].
 * **ATMS:** 
   * We give a brief introduction to [ATMS][crate::docs::atms#atms-ad-hoc-threshold-multi-signatures] and explained the [SNARK-based ATMS with Schnorr setup][crate::docs::atms#snark-based-atms-with-schnorr-setup].
-* **Rescue sponge:** Rescue prime and Sponge function are explained [here][crate::docs::rescue].
+* **Rescue sponge:** 
+  * Rescue prime and Sponge function are explained [here][crate::docs::rescue].
 * **Encoding and I/O:** 
-This [section][crate::docs::encoding_io] contains commonly used types and structs in the library, input and output fields of the crucial functions, and encodings of the field elements.
-  * [Commonly used types and structs][crate::docs::encoding_io#commonly-used-types-and-structs]
-  * [Functions: I/O][crate::docs::encoding_io#functions-io]
-  * [Encoding][crate::docs::encoding_io#encoding]
-* **Flow:** Here we explained the generic [flow][crate::docs::flow] of the functionality.
+  * This [section][crate::docs::encoding_io] contains commonly used types and structs in the library, input and output fields of the crucial functions, and encodings of the field elements.
+    * [Commonly used types and structs][crate::docs::encoding_io#commonly-used-types-and-structs]
+    * [Functions: I/O][crate::docs::encoding_io#functions-io]
+    * [Encoding][crate::docs::encoding_io#encoding]
+* **Flow:** 
+  * Here we explained the generic [flow][crate::docs::flow] of the functionality.
+* **Primitives:**
+  * We explained the relation between the elliptic curves and signature schemes in [here][crate::docs::primitives].
+    * [Relation between BLS12-381 and Jubjub][crate::docs::primitives#relation-between-bls12-381-and-jubjub]
+    * [Relation between Schnorr signature and EdDSA][crate::docs::primitives#relation-between-schnorr-signature-and-eddsa]
+    * [Relation between BLS12-381, Jubjub, and Schnorr][crate::docs::primitives#relation-between-bls12-381-jubjub-and-schnorr]

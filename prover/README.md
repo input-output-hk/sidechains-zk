@@ -4,7 +4,7 @@ The goal of this library is to provide a proof-of-concept implementation of a ci
 This is the first effort of implementing a SNARK-based Ad-hoc Threshold Multi Signature scheme.
 
 * The Zero Knowledge Proving system is implemented with PLONK with KZG commitments.
-* BLS12-381 curve is used. Therefore, in-circuit elliptic curve operations are implemented with JubJub, which is an elliptic curve defined over the Scalar field of BLS12-381, aka its 'embedded' curve. This enables what is sometimes referred to as SNARK-friendly signature schemes. In particular, EdDSA over the JubJub curve. 
+* BLS12-381 curve is used. Therefore, in-circuit elliptic curve operations are implemented with JubJub, which is an elliptic curve defined over the Scalar field of BLS12-381, aka its 'embedded' curve. This enables what is sometimes referred to as SNARK-friendly signature schemes. In particular, Schnorr over the JubJub curve. 
 * As a SNARK-friendly hash algorithm we use Rescue, both for the signature generation/verification as for the Merkle Tree commitments.
 
 ## Compiling the library and header file
@@ -34,3 +34,4 @@ You can also jump to following sections from following links:
 - Rescue sponge hash function: [Rescue][crate::docs::rescue]
 - I/O specs and encoding: [I/O][crate::docs::encoding_io]
 - Flow of the functionality: [flow][crate::docs::flow]
+- Relation between the cryptographic primitives: [primitives][crate::docs::primitives]

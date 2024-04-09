@@ -17,3 +17,6 @@ pub mod encoding_io {}
 
 #[doc = include_str!("../docs/flow.md")]
 pub mod flow {}
+
+#[doc = include_str!("../docs/atms-primitives.md")]
+pub mod primitives {}
