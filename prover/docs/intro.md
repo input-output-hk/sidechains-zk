@@ -57,6 +57,6 @@ This section includes the basic primitives of elliptic curve cryptography requir
   * Key generation, signing, and verification algorithms of Schnorr signature is given in [here][crate::docs::schnorr].
 * **ATMS:** 
   * We give a brief introduction to [ATMS][crate::docs::atms#atms-ad-hoc-threshold-multi-signatures] and explained the [SNARK-based ATMS with Schnorr setup][crate::docs::atms#snark-based-atms-with-schnorr-setup].
-* **Rescue sponge:**
+* **Rescue sponge:** [Rescue][crate::docs::rescue]
 * **Encoding and I/O:**
 * **Flow:** 

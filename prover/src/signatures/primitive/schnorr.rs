@@ -26,6 +26,8 @@ fn generator() -> ExtendedPoint {
 
 impl Schnorr {
     /// Key generation for a Schnorr signer.
+    /// See Schnorr signature scheme [$keygen$][crate::docs::schnorr#keygen] algorithm.
+    ///
     /// Select a random `scalar` as the secret key of the signer. It is an element of the scalar
     /// field of `jubjub` curve.
     /// Compute the public key as an affine elliptic curve point. $sk \cdot G$.
