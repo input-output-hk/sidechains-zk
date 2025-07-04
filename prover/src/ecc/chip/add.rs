@@ -8,8 +8,12 @@ use halo2_proofs::{
     plonk::{Advice, Column, ConstraintSystem, Constraints, Error, Expression, Selector},
     poly::Rotation,
 };
-use halo2curves::bls12_381::Scalar;
-use halo2curves::jubjub;
+//use halo2curves::bls12_381::Scalar;
+//use halo2curves::jubjub;
+use blstrs::{Base, Scalar};
+use blstrs::Base as Fq;
+use blstrs::Fr;
+
 use std::collections::HashSet;
 use halo2_proofs::utils::rational::Rational;
 // The twisted Edwards addition law is defined as follows:
@@ -50,7 +54,7 @@ use halo2_proofs::utils::rational::Rational;
 // y_r * (1 - b * d * x_p * x_q * y_p * y_q) - (y_p + b * (y_p * y_q + x_p * x_q - y_p)) = 0
 
 // `d = -(10240/10241)`
-pub(crate) const EDWARDS_D: jubjub::Fq = jubjub::Fq::from_raw([
+pub(crate) const EDWARDS_D: Fq = Fq::from_raw([
     0x0106_5fd6_d634_3eb1,
     0x292d_7f6d_3757_9d26,
     0xf5fd_9207_e6bd_7fd4,
@@ -74,7 +78,7 @@ pub struct CondAddConfig {
 
 impl CondAddConfig {
     pub(crate) fn configure(
-        meta: &mut ConstraintSystem<jubjub::Base>,
+        meta: &mut ConstraintSystem<Base>,
         b: Column<Advice>,
         x_pr: Column<Advice>,
         y_pr: Column<Advice>,
@@ -111,7 +115,7 @@ impl CondAddConfig {
         [self.x_pr, self.y_pr].into_iter().collect()
     }
 
-    fn create_gate(&self, meta: &mut ConstraintSystem<jubjub::Base>) {
+    fn create_gate(&self, meta: &mut ConstraintSystem<Base>) {
         meta.create_gate("complete addition", |meta| {
             let q_add = meta.query_selector(self.q_add);
             let b = meta.query_advice(self.b, Rotation::cur());
@@ -123,9 +127,9 @@ impl CondAddConfig {
             let y_r = meta.query_advice(self.y_pr, Rotation::next());
 
             // Useful constants
-            let one = Expression::Constant(jubjub::Base::one());
-            let two = Expression::Constant(jubjub::Base::from(2));
-            let three = Expression::Constant(jubjub::Base::from(3));
+            let one = Expression::Constant(Base::one());
+            let two = Expression::Constant(Base::from(2));
+            let three = Expression::Constant(Base::from(3));
             let edwards_d = Expression::Constant(EDWARDS_D);
 
             // Useful composite expressions
@@ -172,10 +176,10 @@ impl CondAddConfig {
     /// | b | Px | Py | Qx | Qy |
     pub(super) fn assign_region(
         &self,
-        ctx: &mut RegionCtx<'_, jubjub::Base>,
+        ctx: &mut RegionCtx<'_, Base>,
         p: &AssignedEccPoint,
         q: &AssignedEccPoint,
-        b: &AssignedCondition<jubjub::Base>,
+        b: &AssignedCondition<Base>,
     ) -> Result<AssignedEccPoint, Error> {
         // Enable `q_add` selector
         ctx.enable(self.q_add)?;
@@ -234,7 +238,8 @@ mod tests {
     use halo2_proofs::circuit::{Layouter, SimpleFloorPlanner, Value};
     use halo2_proofs::dev::MockProver;
     use halo2_proofs::plonk::{Circuit, ConstraintSystem, Error};
-    use halo2curves::jubjub::{AffinePoint, Base, ExtendedPoint};
+    //use halo2curves::jubjub::{AffinePoint, Base, ExtendedPoint};
+    use blstrs::{JubjubAffine as AffinePoint, Base, JubjubExtended as ExtendedPoint};
     use halo2curves::CurveAffine;
     use rand_chacha::ChaCha8Rng;
     use rand_core::SeedableRng;

@@ -13,11 +13,14 @@ use halo2_proofs::{
     },
     poly::Rotation,
 };
-use halo2curves::{jubjub, CurveAffine};
+use halo2curves::CurveAffine;
+use blstrs::{Base, JubjubAffine as AffinePoint};
+use blstrs::Base as Fq; // Jubjub Fq
+use blstrs::Fr;         // Jubjub Fr
 
 type Coordinates = (
-    AssignedCell<jubjub::Base, jubjub::Base>,
-    AssignedCell<jubjub::Base, jubjub::Base>,
+    AssignedCell<Base, Base>,
+    AssignedCell<Base, Base>,
 );
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -31,7 +34,7 @@ pub struct Config {
 
 impl Config {
     pub(super) fn configure(
-        meta: &mut ConstraintSystem<jubjub::Base>,
+        meta: &mut ConstraintSystem<Base>,
         x: Column<Advice>,
         y: Column<Advice>,
     ) -> Self {
@@ -41,14 +44,14 @@ impl Config {
             y,
         };
 
-        let curve_eqn = |meta: &mut VirtualCells<jubjub::Base>| {
+        let curve_eqn = |meta: &mut VirtualCells<Base>| {
             let x_square = meta.query_advice(config.x, Rotation::cur()).square();
             let y_square = meta.query_advice(config.y, Rotation::cur()).square();
 
             // -x^2 + y^2 = 1 + d * x^2 * y^2
             y_square.clone()
                 - x_square.clone()
-                - (Expression::Constant(jubjub::Fq::one())
+                - (Expression::Constant(Fq::one())
                     + Expression::Constant(EDWARDS_D) * x_square * y_square)
         };
 
@@ -76,8 +79,8 @@ impl Config {
 
     fn assign_xy(
         &self,
-        ctx: &mut RegionCtx<'_, jubjub::Base>,
-        value: &Value<(jubjub::Base, jubjub::Base)>,
+        ctx: &mut RegionCtx<'_, Base>,
+        value: &Value<(Base, Base)>,
     ) -> Result<Coordinates, Error> {
         // Assign `x` value
         let x_val = value.map(|value| value.0);
@@ -95,16 +98,16 @@ impl Config {
     /// Assigns a point that can be the identity.
     pub(super) fn point(
         &self,
-        ctx: &mut RegionCtx<'_, jubjub::Base>,
-        value: &Value<jubjub::AffinePoint>,
+        ctx: &mut RegionCtx<'_, Base>,
+        value: &Value<AffinePoint>,
     ) -> Result<AssignedEccPoint, Error> {
         // Enable `q_point` selector
         ctx.enable(self.q_point)?;
 
         let value = value.map(|value| {
             // Map the identity to (0, 0).
-            if value == jubjub::AffinePoint::identity() {
-                (jubjub::Base::zero(), jubjub::Base::one())
+            if value == AffinePoint::identity() {
+                (Base::zero(), Base::one())
             } else {
                 let value = value.coordinates().unwrap();
                 (*value.x(), *value.y())

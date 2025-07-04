@@ -9,10 +9,12 @@ use halo2_proofs::{
     plonk::{Advice, Column, ConstraintSystem, Error, Fixed},
 };
 use halo2curves::{Coordinates, CurveAffine};
+use blstrs::{};
 
 use group::{Curve, Group};
 use halo2_proofs::plonk::Instance;
-use halo2curves::jubjub::{AffinePoint, Base, Scalar};
+//use halo2curves::jubjub::{AffinePoint, Base, Scalar};
+use blstrs::{JubjubAffine as AffinePoint, Base, Fr as Scalar};
 use std::convert::TryInto;
 use std::fmt::Debug;
 use std::ops::Mul;
@@ -630,7 +632,8 @@ mod tests {
     use halo2_proofs::circuit::{Layouter, SimpleFloorPlanner, Value};
     use halo2_proofs::dev::MockProver;
     use halo2_proofs::plonk::{Circuit, ConstraintSystem, Error};
-    use halo2curves::jubjub::{AffinePoint, Base, ExtendedPoint, Scalar, SubgroupPoint};
+    // use halo2curves::jubjub::{AffinePoint, Base, ExtendedPoint, Scalar, SubgroupPoint};
+    use blstrs::{JubjubAffine as AffinePoint, Base, JubjubExtended as ExtendedPoint, Fr as Scalar, JubjubSubgroup as SubgroupPoint};
     use halo2curves::CurveAffine;
     use rand_chacha::ChaCha8Rng;
     use rand_core::SeedableRng;

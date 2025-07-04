@@ -6,7 +6,8 @@ use group::{
     Curve,
 };
 use halo2_proofs::utils::arithmetic::lagrange_interpolate;
-use halo2curves::{jubjub, CurveAffine};
+// use halo2curves::{jubjub, CurveAffine};
+use blstrs::{Fr as Scalar};
 
 /// Window size for fixed-base scalar multiplication
 pub const FIXED_BASE_WINDOW_SIZE: usize = 3;
@@ -16,7 +17,7 @@ pub const H: usize = 1 << FIXED_BASE_WINDOW_SIZE;
 
 /// Number of windows for a full-width scalar
 pub const NUM_WINDOWS: usize =
-    (jubjub::Scalar::NUM_BITS as usize + FIXED_BASE_WINDOW_SIZE - 1) / FIXED_BASE_WINDOW_SIZE;
+    (Scalar::NUM_BITS as usize + FIXED_BASE_WINDOW_SIZE - 1) / FIXED_BASE_WINDOW_SIZE;
 
 /// Number of windows for a short signed scalar
 pub const NUM_WINDOWS_SHORT: usize =

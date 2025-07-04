@@ -14,7 +14,8 @@ use group::prime::PrimeCurveAffine;
 use group::{Curve, Group};
 use halo2_proofs::circuit::{Chip, Value};
 use halo2_proofs::plonk::{ConstraintSystem, Error};
-use halo2curves::jubjub::{AffinePoint, Base, ExtendedPoint, Scalar, SubgroupPoint};
+// use halo2curves::jubjub::{AffinePoint, Base, ExtendedPoint, Scalar, SubgroupPoint};
+use blstrs::{Base, Fr as Scalar, JubjubAffine as AffinePoint, JubjubExtended as ExtendedPoint, JubjubSubgroup as SubgroupPoint};
 use num_integer::Integer;
 
 /// Type of an Assigned Schnorr Signature
@@ -120,7 +121,7 @@ impl SchnorrVerifierGate {
         let input_hash = [signature.0.x.clone(), pk.x.clone(), msg.clone()];
         let challenge = self.rescue_hash_gate.hash(ctx, &input_hash)?; //  larger than mod with high prob
 
-        let lhs = self.combined_mul(ctx, &signature.1 .0, &challenge, &assigned_generator, pk)?;
+        let lhs = self.combined_mul(ctx, &signature.1.0, &challenge, &assigned_generator, pk)?;
         self.ecc_gate.constrain_equal(ctx, &lhs, &signature.0)?;
 
         Ok(())
@@ -358,7 +359,8 @@ mod tests {
     use halo2_proofs::circuit::{Layouter, SimpleFloorPlanner};
     use halo2_proofs::dev::MockProver;
     use halo2_proofs::plonk::Circuit;
-    use halo2curves::jubjub::{ExtendedPoint, Scalar};
+    // use halo2curves::jubjub::{ExtendedPoint, Scalar};
+    use blstrs::{JubjubExtended as ExtendedPoint, Fr as Scalar};
     use halo2curves::CurveAffine;
     use rand_chacha::ChaCha8Rng;
     use rand_core::SeedableRng;

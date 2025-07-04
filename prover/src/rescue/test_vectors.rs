@@ -10,7 +10,8 @@
 //! - four random key-input pairs
 //! The random seed used is 0.
 
-use halo2curves::bls12_381::Scalar;
+//use halo2curves::bls12_381::Scalar;
+use blstrs::Scalar;
 
 use crate::rescue::primitive::RescueState;
 
