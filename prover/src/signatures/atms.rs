@@ -131,14 +131,10 @@ mod tests {
     use group::{Curve, Group};
     use halo2_proofs::circuit::{Layouter, SimpleFloorPlanner};
     use halo2_proofs::dev::MockProver;
-    use halo2_proofs::plonk::{create_proof, keygen_pk, keygen_vk, verify_proof, Circuit};
-    use halo2_proofs::poly::commitment::Prover;
-    use halo2_proofs::poly::kzg::commitment::{KZGCommitmentScheme, ParamsKZG};
-    use halo2_proofs::poly::kzg::multiopen::{ProverGWC, VerifierGWC};
-    use halo2_proofs::poly::kzg::strategy::AccumulatorStrategy;
-    use halo2_proofs::poly::VerificationStrategy;
-    use halo2_proofs::transcript::{
-        Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
+    use halo2_proofs::{
+        plonk::{create_proof, keygen_pk, keygen_vk, prepare, Circuit},
+        poly::{commitment::Guard, kzg::params::ParamsKZG},
+        transcript::{CircuitTranscript, Transcript},
     };
     use halo2curves::bls12_381::Bls12;
     use halo2curves::jubjub::{AffinePoint, ExtendedPoint, Scalar, SubgroupPoint};

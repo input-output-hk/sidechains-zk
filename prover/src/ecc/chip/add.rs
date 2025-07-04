@@ -5,13 +5,13 @@ use ff::PrimeField;
 use halo2_proofs::circuit::Value;
 use halo2_proofs::{
     circuit::Region,
-    plonk::{Advice, Assigned, Column, ConstraintSystem, Constraints, Error, Expression, Selector},
+    plonk::{Advice, Column, ConstraintSystem, Constraints, Error, Expression, Selector},
     poly::Rotation,
 };
 use halo2curves::bls12_381::Scalar;
 use halo2curves::jubjub;
 use std::collections::HashSet;
-
+use halo2_proofs::utils::rational::Rational;
 // The twisted Edwards addition law is defined as follows:
 //
 //
@@ -194,11 +194,11 @@ impl CondAddConfig {
             .map(|((((b, x_p), y_p), x_q), y_q)| {
                 {
                     // λ = (b * d * x_p * x_q * y_p * y_q)
-                    let lambda = Assigned::from(EDWARDS_D) * *b * *x_p * *x_q * *y_p * *y_q;
+                    let lambda = Rational::from(EDWARDS_D) * *b * *x_p * *x_q * *y_p * *y_q;
                     // α = inv0(1 + d x_p x_qr y_p y_qr)
-                    let alpha = (Assigned::from(Scalar::one()) + lambda).invert();
+                    let alpha = (Rational::from(Scalar::one()) + lambda).invert();
                     // β = inv0(1 - d x_p x_qr y_p y_qr)
-                    let beta = (Assigned::from(Scalar::one()) - lambda).invert();
+                    let beta = (Rational::from(Scalar::one()) - lambda).invert();
                     // x_r = (x_p + b * (x_p * y_q + x_q * y_p - x_p) * (1 + lambda)^{-1}
                     let x_r = alpha * (*x_p + *b * (*x_p * *y_q + *x_q * *y_p - *x_p));
                     // y_r = (y_p + b * (x_p * x_q + y_p * y_q - y_p)) * (1 - lambda)^{-1}

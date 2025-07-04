@@ -6,9 +6,8 @@
  use halo2_proofs::{
      circuit::{Layouter, SimpleFloorPlanner, Value},
      plonk::{create_proof, keygen_pk, keygen_vk, Circuit, ConstraintSystem, Error},
-     poly::kzg::commitment::{KZGCommitmentScheme, ParamsKZG},
-     poly::kzg::multiopen::ProverGWC,
-     transcript::{Blake2bWrite, Challenge255, TranscriptWriterBuffer},
+     poly::{commitment::Guard, kzg::params::ParamsKZG},
+     transcript::{CircuitTranscript, Transcript},
  };
  use halo2curves::bls12_381::Bls12;
  use halo2curves::jubjub::{AffinePoint, Base, ExtendedPoint, SubgroupPoint};

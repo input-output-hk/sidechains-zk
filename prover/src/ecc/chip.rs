@@ -6,7 +6,7 @@ use ff::{Field, PrimeField};
 use group::prime::PrimeCurveAffine;
 use halo2_proofs::{
     circuit::{Chip, Layouter, Value},
-    plonk::{Advice, Assigned, Column, ConstraintSystem, Error, Fixed},
+    plonk::{Advice, Column, ConstraintSystem, Error, Fixed},
 };
 use halo2curves::{Coordinates, CurveAffine};
 

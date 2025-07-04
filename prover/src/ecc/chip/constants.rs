@@ -5,7 +5,7 @@ use group::{
     ff::{Field, PrimeField},
     Curve,
 };
-use halo2_proofs::arithmetic::lagrange_interpolate;
+use halo2_proofs::utils::arithmetic::lagrange_interpolate;
 use halo2curves::{jubjub, CurveAffine};
 
 /// Window size for fixed-base scalar multiplication

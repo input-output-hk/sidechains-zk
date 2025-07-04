@@ -4,10 +4,11 @@
 use std::fmt::Debug;
 
 use halo2_proofs::{
-    arithmetic::CurveAffine,
     circuit::{Chip, Layouter, Value},
     plonk::Error,
 };
+use halo2curves::CurveAffine;
+
 
 pub mod chip;
 

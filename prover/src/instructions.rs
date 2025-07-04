@@ -8,7 +8,7 @@ use crate::util::{big_to_fe, decompose, fe_to_big, power_of_two, RegionCtx};
 use crate::{AssignedCondition, AssignedValue};
 use ff::PrimeField;
 use halo2_proofs::{
-    arithmetic::Field,
+    utils::arithmetic::Field,
     circuit::{Chip, Layouter, Value},
     plonk::Error,
 };

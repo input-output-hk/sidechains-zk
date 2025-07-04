@@ -8,7 +8,7 @@ use crate::util::RegionCtx;
 use halo2_proofs::{
     circuit::{AssignedCell, Region, Value},
     plonk::{
-        Advice, Assigned, Column, ConstraintSystem, Constraints, Error, Expression, Selector,
+        Advice, Column, ConstraintSystem, Constraints, Error, Expression, Selector,
         VirtualCells,
     },
     poly::Rotation,
