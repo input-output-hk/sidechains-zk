@@ -1,7 +1,7 @@
 use super::AssignedEccPoint;
 use crate::util::RegionCtx;
 use crate::AssignedCondition;
-use ff::PrimeField;
+use ff::{Field, PrimeField};
 use halo2_proofs::circuit::Value;
 use halo2_proofs::{
     circuit::Region,
@@ -127,7 +127,7 @@ impl CondAddConfig {
             let y_r = meta.query_advice(self.y_pr, Rotation::next());
 
             // Useful constants
-            let one = Expression::Constant(Base::one());
+            let one = Expression::Constant(Base::ONE);
             let two = Expression::Constant(Base::from(2));
             let three = Expression::Constant(Base::from(3));
             let edwards_d = Expression::Constant(EDWARDS_D);
@@ -200,9 +200,9 @@ impl CondAddConfig {
                     // λ = (b * d * x_p * x_q * y_p * y_q)
                     let lambda = Rational::from(EDWARDS_D) * *b * *x_p * *x_q * *y_p * *y_q;
                     // α = inv0(1 + d x_p x_qr y_p y_qr)
-                    let alpha = (Rational::from(Scalar::one()) + lambda).invert();
+                    let alpha = (Rational::from(Scalar::ONE) + lambda).invert();
                     // β = inv0(1 - d x_p x_qr y_p y_qr)
-                    let beta = (Rational::from(Scalar::one()) - lambda).invert();
+                    let beta = (Rational::from(Scalar::ONE) - lambda).invert();
                     // x_r = (x_p + b * (x_p * y_q + x_q * y_p - x_p) * (1 + lambda)^{-1}
                     let x_r = alpha * (*x_p + *b * (*x_p * *y_q + *x_q * *y_p - *x_p));
                     // y_r = (y_p + b * (x_p * x_q + y_p * y_q - y_p)) * (1 - lambda)^{-1}

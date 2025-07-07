@@ -96,7 +96,7 @@ impl AtmsVerifierGate {
                 counter = self.schnorr_gate.ecc_gate.main_gate.add_constant(
                     ctx,
                     &counter,
-                    Base::one(),
+                    Base::ONE,
                 )?;
             }
         }

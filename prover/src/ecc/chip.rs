@@ -303,7 +303,7 @@ impl EccInstructions<AffinePoint> for EccChip {
         ctx: &mut RegionCtx<'_, Base>,
         value: &Value<Scalar>,
     ) -> Result<Self::ScalarVar, Error> {
-        let value_with_base = value.map(|v| Base::from_bytes(&v.to_bytes()).unwrap());
+        let value_with_base = value.map(|v| Base::from_bytes_le(&v.to_bytes()).unwrap());
         let scalar =
             ctx.assign_advice(|| "assign scalar", self.config.scalar_mul, value_with_base)?;
         ctx.next();

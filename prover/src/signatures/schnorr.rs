@@ -151,7 +151,7 @@ impl SchnorrVerifierGate {
         ];
 
         let jubjub_mod =
-            Base::from_bytes(&jub_jub_scalar_bytes).expect("Failed to deserialise modulus"); // This will not fail as jubjub mod is smaller than BLS
+            Base::from_bytes_le(&jub_jub_scalar_bytes).expect("Failed to deserialise modulus"); // This will not fail as jubjub mod is smaller than BLS
 
         let mult_remainder = scalar_2
             .value()

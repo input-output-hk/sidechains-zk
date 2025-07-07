@@ -12,7 +12,7 @@
 
 //use halo2curves::bls12_381::Scalar;
 use blstrs::Scalar;
-
+use ff::Field;
 use crate::rescue::primitive::RescueState;
 
 type InputOutputPair<F> = (RescueState<F>, RescueState<F>);
@@ -84,10 +84,10 @@ pub(super) const BLS_TEST_VECTORS: [InputOutputPair<Scalar>; 5] = [
     // [0, 0, 0, 0]
     (
         [
-            Scalar::zero(),
-            Scalar::zero(),
-            Scalar::zero(),
-            Scalar::zero(),
+            Scalar::ZERO,
+            Scalar::ZERO,
+            Scalar::ZERO,
+            Scalar::ZERO,
         ],
         [
             Scalar::from_raw([

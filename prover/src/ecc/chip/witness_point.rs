@@ -16,7 +16,8 @@ use halo2_proofs::{
 use halo2curves::CurveAffine;
 use blstrs::{Base, JubjubAffine as AffinePoint};
 use blstrs::Base as Fq; // Jubjub Fq
-use blstrs::Fr;         // Jubjub Fr
+use blstrs::Fr; // Jubjub Fr
+use ff::Field;
 
 type Coordinates = (
     AssignedCell<Base, Base>,
@@ -51,7 +52,7 @@ impl Config {
             // -x^2 + y^2 = 1 + d * x^2 * y^2
             y_square.clone()
                 - x_square.clone()
-                - (Expression::Constant(Fq::one())
+                - (Expression::Constant(Fq::ONE)
                     + Expression::Constant(EDWARDS_D) * x_square * y_square)
         };
 
@@ -107,7 +108,7 @@ impl Config {
         let value = value.map(|value| {
             // Map the identity to (0, 0).
             if value == AffinePoint::identity() {
-                (Base::zero(), Base::one())
+                (Base::ZERO, Base::ONE)
             } else {
                 let value = value.coordinates().unwrap();
                 (*value.x(), *value.y())

@@ -62,7 +62,7 @@ impl Schnorr {
 
         // we need to have some wide bytes to reduce the challenge.
         let mut wide_bytes = [0u8; 64];
-        wide_bytes[..32].copy_from_slice(&challenge.to_bytes());
+        wide_bytes[..32].copy_from_slice(&challenge.to_bytes_le());
         let reduced_challenge = Scalar::from_bytes_wide(&wide_bytes);
 
         let response = k + reduced_challenge * key_pair.0;
@@ -83,7 +83,7 @@ impl Schnorr {
 
         // we need to have some wide bytes to reduce the challenge.
         let mut wide_bytes = [0u8; 64];
-        wide_bytes[..32].copy_from_slice(&challenge.to_bytes());
+        wide_bytes[..32].copy_from_slice(&challenge.to_bytes_le());
         let reduced_challenge = Scalar::from_bytes_wide(&wide_bytes);
 
         if generator().mul(sig.1) == sig.0.add(pk.mul(reduced_challenge).to_affine()) {

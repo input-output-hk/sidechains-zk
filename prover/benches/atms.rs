@@ -18,16 +18,19 @@ use halo2_proofs::{
 };
 // use halo2curves::bls12_381::Bls12;
 // use halo2curves::jubjub::{AffinePoint, Base};
-use blstrs::Bls12;
+use blstrs::{Bls12, BlsScalar};
 use blstrs::{JubjubAffine as AffinePoint, Base};
 use rand::prelude::IteratorRandom;
 use rand_chacha::ChaCha8Rng;
 use rand_core::SeedableRng;
 use std::fs::{create_dir_all, File};
-use std::io::{BufReader, Write};
+use std::io::{BufReader, Write, Read};
 use std::path::Path;
+use std::io;
 use halo2_proofs::utils::helpers::ProcessedSerdeObject;
-use blake2b_simd::State as Blake2bState;
+use blake2b_simd::{State as Blake2bState, State};
+use halo2_proofs::plonk::k_from_circuit;
+use halo2_proofs::poly::kzg::KZGCommitmentScheme;
 use halo2_proofs::utils::SerdeFormat;
 
 #[derive(Clone)]
@@ -171,6 +174,8 @@ fn atms_bench_helper(c: &mut Criterion, k: u32, num_parties: usize, threshold: u
         threshold: Base::from(threshold as u64),
     };
 
+    let k: u32 = k_from_circuit(&circuit);
+
     // Create parent directory for assets
     create_dir_all("./benches/atms_assets").expect("Failed to create sha256_assets directory");
 
@@ -193,6 +198,8 @@ fn atms_bench_helper(c: &mut Criterion, k: u32, num_parties: usize, threshold: u
     let params_fs = File::open(Path::new(&params_path)).expect("couldn't load sha256_params");
 
     let kzg_params = ParamsKZG::<Bls12>::read_custom(&mut BufReader::new(params_fs), SerdeFormat::RawBytesUnchecked).expect("Failed to read params");
+
+    // let kzg_params: ParamsKZG<Bls12> = ParamsKZG::<Bls12>::unsafe_setup(k, rng.clone());
     let vk = keygen_vk(&kzg_params, &circuit).unwrap();
     let pk = keygen_pk(vk, &circuit).unwrap();
 
@@ -201,7 +208,7 @@ fn atms_bench_helper(c: &mut Criterion, k: u32, num_parties: usize, threshold: u
         b.iter(|| {
             let mut transcript: CircuitTranscript<Blake2bState> =
                 CircuitTranscript::<Blake2bState>::init();
-            create_proof(
+            create_proof::<Base, KZGCommitmentScheme<_>, _, _>(
                 &kzg_params,
                 &pk,
                 &[circuit.clone()],
