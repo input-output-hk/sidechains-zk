@@ -13,18 +13,22 @@ use halo2_proofs::poly::commitment::Params;
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{create_proof, keygen_pk, keygen_vk, Circuit, ConstraintSystem, Error},
-    poly::kzg::commitment::{KZGCommitmentScheme, ParamsKZG},
-    poly::kzg::multiopen::ProverGWC,
-    transcript::{Blake2bWrite, Challenge255, TranscriptWriterBuffer},
+    poly::{commitment::Guard, kzg::params::ParamsKZG},
+    transcript::{CircuitTranscript, Transcript},
 };
-use halo2curves::bls12_381::Bls12;
-use halo2curves::jubjub::{AffinePoint, Base};
+// use halo2curves::bls12_381::Bls12;
+// use halo2curves::jubjub::{AffinePoint, Base};
+use blstrs::Bls12;
+use blstrs::{JubjubAffine as AffinePoint, Base};
 use rand::prelude::IteratorRandom;
 use rand_chacha::ChaCha8Rng;
 use rand_core::SeedableRng;
 use std::fs::{create_dir_all, File};
 use std::io::{BufReader, Write};
 use std::path::Path;
+use halo2_proofs::utils::helpers::ProcessedSerdeObject;
+use blake2b_simd::State as Blake2bState;
+use halo2_proofs::utils::SerdeFormat;
 
 #[derive(Clone)]
 struct BenchCircuitConfig {
@@ -174,10 +178,11 @@ fn atms_bench_helper(c: &mut Criterion, k: u32, num_parties: usize, threshold: u
     let params_path = format!("./benches/atms_assets/atms_params_{}", k);
 
     if File::open(Path::new(&params_path)).is_err() {
-        let kzg_params = ParamsKZG::<Bls12>::setup(k, &mut rng);
+        let kzg_params = ParamsKZG::<Bls12>::unsafe_setup(k, &mut rng);
         let mut buf = Vec::new();
 
-        kzg_params.write(&mut buf).expect("Failed to write params");
+        kzg_params.write_custom(&mut buf, SerdeFormat::RawBytesUnchecked).expect("Failed to write params");
+
         let mut file =
             File::create(Path::new(&params_path)).expect("Failed to create sha256_params");
 
@@ -187,16 +192,16 @@ fn atms_bench_helper(c: &mut Criterion, k: u32, num_parties: usize, threshold: u
 
     let params_fs = File::open(Path::new(&params_path)).expect("couldn't load sha256_params");
 
-    let kzg_params = ParamsKZG::<Bls12>::read::<_>(&mut BufReader::new(params_fs))
-        .expect("Failed to read params");
+    let kzg_params = ParamsKZG::<Bls12>::read_custom(&mut BufReader::new(params_fs), SerdeFormat::RawBytesUnchecked).expect("Failed to read params");
     let vk = keygen_vk(&kzg_params, &circuit).unwrap();
-    let pk = keygen_pk(&kzg_params, vk, &circuit).unwrap();
+    let pk = keygen_pk(vk, &circuit).unwrap();
 
     let mut group = c.benchmark_group("ATMS");
     group.bench_function(BenchmarkId::new("Proof generation", threshold), |b| {
         b.iter(|| {
-            let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
-            create_proof::<KZGCommitmentScheme<_>, ProverGWC<_>, _, _, _, _>(
+            let mut transcript: CircuitTranscript<Blake2bState> =
+                CircuitTranscript::<Blake2bState>::init();
+            create_proof(
                 &kzg_params,
                 &pk,
                 &[circuit.clone()],
