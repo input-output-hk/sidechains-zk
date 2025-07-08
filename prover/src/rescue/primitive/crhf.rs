@@ -121,7 +121,6 @@ where
 mod tests {
     use super::*;
     use crate::rescue::{primitive::RescueParametersBls, test_vectors};
-    // use halo2curves::bls12_381::Scalar;
     use blstrs::Scalar;
 
     #[test]

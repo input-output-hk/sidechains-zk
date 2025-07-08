@@ -4,7 +4,6 @@
 //! from [this repo](https://github.com/alexandroszacharakis8/Marvellous)
 //! commit
 
-// use halo2curves::bls12_381::Scalar;
 use blstrs::Scalar;
 
 use super::rescue_parameters::*;

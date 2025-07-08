@@ -160,7 +160,6 @@ mod tests {
     use halo2_proofs::circuit::{Layouter, SimpleFloorPlanner};
     use halo2_proofs::dev::MockProver;
     use halo2_proofs::plonk::Circuit;
-    // use halo2curves::bls12_381::Scalar;
     use blstrs::Scalar;
     use rand_chacha::ChaCha8Rng;
     use rand_core::SeedableRng;

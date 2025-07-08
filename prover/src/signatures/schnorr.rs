@@ -14,8 +14,7 @@ use group::prime::PrimeCurveAffine;
 use group::{Curve, Group};
 use halo2_proofs::circuit::{Chip, Value};
 use halo2_proofs::plonk::{ConstraintSystem, Error};
-// use halo2curves::jubjub::{AffinePoint, Base, ExtendedPoint, Scalar, SubgroupPoint};
-use blstrs::{Base, Fr as Scalar, JubjubAffine as AffinePoint, JubjubExtended as ExtendedPoint, JubjubSubgroup as SubgroupPoint};
+use blstrs::{Base, Fr as JubjubScalar, JubjubAffine, JubjubExtended, JubjubSubgroup};
 use num_integer::Integer;
 
 /// Type of an Assigned Schnorr Signature
@@ -30,7 +29,7 @@ pub type AssignedSchnorrSignature = (AssignedEccPoint, ScalarVar);
 /// Schnorr signature consists of
 /// - An affine point on jubjub curve: [AffinePoint][crate::docs::encoding_io#type-affinepoint]
 /// - A [Scalar][crate::docs::encoding_io#type-scalar] which is an element of the scalar field $\mathbb{F}_r$ of the Jubjub curve.
-pub type SchnorrSig = (AffinePoint, Scalar);
+pub type SchnorrSig = (JubjubAffine, JubjubScalar);
 
 /// Configuration for SchnorrVerifierGate
 ///
@@ -105,7 +104,7 @@ impl SchnorrVerifierGate {
 
         let assigned_generator = self.ecc_gate.witness_point(
             ctx,
-            &Value::known(ExtendedPoint::from(SubgroupPoint::generator()).to_affine()),
+            &Value::known(JubjubExtended::from(JubjubSubgroup::generator()).to_affine()),
         )?;
 
         let one = self
@@ -359,8 +358,7 @@ mod tests {
     use halo2_proofs::circuit::{Layouter, SimpleFloorPlanner};
     use halo2_proofs::dev::MockProver;
     use halo2_proofs::plonk::Circuit;
-    // use halo2curves::jubjub::{ExtendedPoint, Scalar};
-    use blstrs::{JubjubExtended as ExtendedPoint, Fr as Scalar};
+    use blstrs::{JubjubExtended, Fr as JubjubScalar};
     use halo2curves::CurveAffine;
     use rand_chacha::ChaCha8Rng;
     use rand_core::SeedableRng;
@@ -374,8 +372,8 @@ mod tests {
     // The prover claims knowledge of a valid signature for a given public key and message
     #[derive(Default)]
     struct TestCircuitSignature {
-        signature: (AffinePoint, Scalar),
-        pk: AffinePoint,
+        signature: (JubjubAffine, JubjubScalar),
+        pk: JubjubAffine,
         msg: Base,
     }
 
@@ -469,7 +467,7 @@ mod tests {
         assert!(prover.verify().is_err());
 
         // We try to verify with a different pk
-        let pk_fake = ExtendedPoint::random(&mut rng).to_affine();
+        let pk_fake = JubjubExtended::random(&mut rng).to_affine();
 
         let pi = vec![vec![pk_fake.get_u(), pk_fake.get_v(), msg]];
 

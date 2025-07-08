@@ -19,7 +19,6 @@ use crate::AssignedValue;
 use ff::Field;
 use halo2_proofs::circuit::{Chip, Value};
 use halo2_proofs::plonk::{ConstraintSystem, Error};
-// use halo2curves::jubjub::Base;
 use blstrs::Base;
 
 /// Configuration for `AtmsVerifierGate`.
@@ -137,9 +136,7 @@ mod tests {
         poly::{commitment::Guard, kzg::params::ParamsKZG},
         transcript::{CircuitTranscript, Transcript},
     };
-    // use halo2curves::bls12_381::Bls12;
-    // use halo2curves::jubjub::{AffinePoint, ExtendedPoint, Scalar, SubgroupPoint};
-    use blstrs::{Base, Bls12, JubjubAffine as AffinePoint, JubjubExtended as ExtendedPoint, JubjubSubgroup as SubgroupPoint};
+    use blstrs::{Bls12, JubjubAffine, JubjubExtended, JubjubSubgroup};
     use rand::prelude::IteratorRandom;
     use rand_chacha::ChaCha8Rng;
     use rand_core::SeedableRng;
@@ -154,7 +151,7 @@ mod tests {
     #[derive(Default)]
     struct TestCircuitAtmsSignature {
         signatures: Vec<Option<SchnorrSig>>,
-        pks: Vec<AffinePoint>,
+        pks: Vec<JubjubAffine>,
         pks_comm: Base,
         msg: Base,
         threshold: Base,
@@ -262,7 +259,7 @@ mod tests {
         const THRESHOLD: usize = 72;
 
         let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
-        let generator = ExtendedPoint::from(SubgroupPoint::generator());
+        let generator = JubjubExtended::from(JubjubSubgroup::generator());
         let msg = Base::random(&mut rng);
 
         let keypairs = (0..NUM_PARTIES)
