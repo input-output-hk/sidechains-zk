@@ -4,6 +4,7 @@ use group::Group;
 use group::prime::PrimeCurveAffine;
 
 use crate::ecc::chip::add::EDWARDS_D;
+use crate::ecc::chip::AffinePoint;
 use crate::util::RegionCtx;
 use halo2_proofs::{
     circuit::{AssignedCell, Region, Value},
@@ -13,10 +14,7 @@ use halo2_proofs::{
     },
     poly::Rotation,
 };
-use halo2curves::CurveAffine;
-use blstrs::{Base, JubjubAffine as AffinePoint};
-use blstrs::Base as Fq; // Jubjub Fq
-use blstrs::Fr; // Jubjub Fr
+use blstrs::{Base, JubjubAffine};
 use ff::Field;
 
 type Coordinates = (
@@ -52,7 +50,7 @@ impl Config {
             // -x^2 + y^2 = 1 + d * x^2 * y^2
             y_square.clone()
                 - x_square.clone()
-                - (Expression::Constant(Fq::ONE)
+                - (Expression::Constant(Base::ONE)
                     + Expression::Constant(EDWARDS_D) * x_square * y_square)
         };
 
@@ -100,18 +98,17 @@ impl Config {
     pub(super) fn point(
         &self,
         ctx: &mut RegionCtx<'_, Base>,
-        value: &Value<AffinePoint>,
+        value: &Value<JubjubAffine>,
     ) -> Result<AssignedEccPoint, Error> {
         // Enable `q_point` selector
         ctx.enable(self.q_point)?;
 
         let value = value.map(|value| {
             // Map the identity to (0, 0).
-            if value == AffinePoint::identity() {
+            if value == JubjubAffine::identity() {
                 (Base::ZERO, Base::ONE)
             } else {
-                let value = value.coordinates().unwrap();
-                (*value.x(), *value.y())
+                (value.x(), value.y())
             }
         });
 

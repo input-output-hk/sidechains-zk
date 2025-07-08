@@ -9,8 +9,7 @@
      poly::{commitment::Guard, kzg::params::ParamsKZG},
      transcript::{CircuitTranscript, Transcript},
  };
- use halo2curves::bls12_381::Bls12;
- use halo2curves::jubjub::{AffinePoint, Base, ExtendedPoint, SubgroupPoint};
+ use blstrs::{Bls12, JubjubAffine as AffinePoint, Base, JubjubExtended as ExtendedPoint, JubjubSubgroup as SubgroupPoint};
  use rand::prelude::IteratorRandom;
  use rand_core::SeedableRng;
  use std::fs::{create_dir_all, File};

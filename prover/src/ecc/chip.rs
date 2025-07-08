@@ -1,20 +1,14 @@
 //! Chip implementations for the ECC gadgets.
 
-use arrayvec::ArrayVec;
-
+use blstrs::{Base as JubjubBase, Fr as JubjubScalar, JubjubAffine};
 use ff::{Field, PrimeField};
 use group::prime::PrimeCurveAffine;
-use halo2_proofs::{
-    circuit::{Chip, Layouter, Value},
-    plonk::{Advice, Column, ConstraintSystem, Error, Fixed},
-};
-use halo2curves::{Coordinates, CurveAffine};
-use blstrs::{};
-
 use group::{Curve, Group};
 use halo2_proofs::plonk::Instance;
-//use halo2curves::jubjub::{AffinePoint, Base, Scalar};
-use blstrs::{JubjubAffine as AffinePoint, Base, Fr as Scalar};
+use halo2_proofs::{
+    circuit::{Chip, Layouter, Value},
+    plonk::{Advice, Column, ConstraintSystem, Error},
+};
 use std::convert::TryInto;
 use std::fmt::Debug;
 use std::ops::Mul;
@@ -24,9 +18,9 @@ pub mod constants;
 pub(super) mod witness_point;
 
 use crate::ecc::chip::add::CondAddConfig;
-use crate::instructions::{MainGateInstructions, Term};
+use crate::instructions::MainGateInstructions;
 use crate::main_gate::{MainGate, MainGateConfig};
-use crate::util::{decompose, RegionCtx};
+use crate::util::RegionCtx;
 use crate::{AssignedCondition, AssignedValue};
 pub use constants::*;
 
@@ -38,11 +32,11 @@ pub struct AssignedEccPoint {
     /// x-coordinate
     ///
     /// Stored as an `Assigned<F>` to enable batching inversions.
-    pub x: AssignedValue<Base>,
+    pub x: AssignedValue<JubjubBase>,
     /// y-coordinate
     ///
     /// Stored as an `Assigned<F>` to enable batching inversions.
-    pub y: AssignedValue<Base>,
+    pub y: AssignedValue<JubjubBase>,
 }
 
 impl AssignedEccPoint {
@@ -50,32 +44,32 @@ impl AssignedEccPoint {
     ///
     /// This is an internal API that we only use where we know we have a valid curve point.
     pub(crate) fn from_coordinates_unchecked(
-        x: AssignedValue<Base>,
-        y: AssignedValue<Base>,
+        x: AssignedValue<JubjubBase>,
+        y: AssignedValue<JubjubBase>,
     ) -> Self {
         AssignedEccPoint { x, y }
     }
 
     /// Returns the value of this curve point, if known.
-    pub fn point(&self) -> Value<AffinePoint> {
+    pub fn point(&self) -> Value<JubjubAffine> {
         self.x.value().zip(self.y.value()).map(|(x, y)| {
             if x.is_zero_vartime() && y.is_zero_vartime() {
-                AffinePoint::identity()
+                JubjubAffine::identity()
             } else {
-                AffinePoint::from_raw_unchecked(*x, *y)
+                JubjubAffine::from_raw_unchecked(*x, *y)
             }
         })
     }
 
     /// The cell containing the affine x-coordinate,
     /// or 0 for the zero point.
-    pub fn x(&self) -> AssignedValue<Base> {
+    pub fn x(&self) -> AssignedValue<JubjubBase> {
         self.x.clone()
     }
 
     /// The cell containing the affine y-coordinate,
     /// or 0 for the zero point.
-    pub fn y(&self) -> AssignedValue<Base> {
+    pub fn y(&self) -> AssignedValue<JubjubBase> {
         self.y.clone()
     }
 
@@ -102,19 +96,19 @@ pub struct EccConfig {
 /// An [`EccInstructions`] chip that uses 10 advice columns.
 #[derive(Clone, Debug)]
 pub struct EccChip {
-    pub main_gate: MainGate<Base>,
+    pub main_gate: MainGate<JubjubBase>,
     pub(crate) config: EccConfig,
 }
 
 impl EccChip {
     /// Given config creates new chip that implements ranging
-    pub fn new(main_gate: MainGate<Base>, config: EccConfig) -> Self {
+    pub fn new(main_gate: MainGate<JubjubBase>, config: EccConfig) -> Self {
         Self { main_gate, config }
     }
 
     /// Configures lookup and returns the resulting config
     pub fn configure(
-        meta: &mut ConstraintSystem<Base>,
+        meta: &mut ConstraintSystem<JubjubBase>,
         maingate_config: MainGateConfig,
     ) -> EccConfig {
         let q_add = meta.complex_selector();
@@ -143,7 +137,7 @@ impl EccChip {
     }
 }
 
-impl Chip<Base> for EccChip {
+impl Chip<JubjubBase> for EccChip {
     type Config = EccConfig;
     type Loaded = ();
 
@@ -156,8 +150,33 @@ impl Chip<Base> for EccChip {
     }
 }
 
+/// Represents the point on the curve in Affine form
+pub trait AffinePoint: Mul<Self::Scalar> {
+    /// Base field of the curve
+    type Base: PrimeField;
+    /// Scalar field of the curve
+    type Scalar: PrimeField;
+    /// Get x-coordinate
+    fn x(&self) -> Self::Base;
+    /// Get y-coordinate
+    fn y(&self) -> Self::Base;
+}
+
+impl AffinePoint for JubjubAffine {
+    type Base = JubjubBase;
+    type Scalar = JubjubScalar;
+
+    fn x(&self) -> Self::Base {
+        self.get_u()
+    }
+
+    fn y(&self) -> Self::Base {
+        self.get_v()
+    }
+}
+
 /// The set of circuit instructions required to use the ECC gadgets.
-pub trait EccInstructions<C: CurveAffine>: Chip<C::Base> + Clone + Debug {
+pub trait EccInstructions<C: AffinePoint>: Chip<C::Base> + Clone + Debug {
     /// Variable representing a scalar used in variable-base scalar mul.
     ///
     /// This type is treated as a full-width scalar. However, if `Self` implements
@@ -211,10 +230,10 @@ pub trait EccInstructions<C: CurveAffine>: Chip<C::Base> + Clone + Debug {
     /// offset is set in the row were the result is stored.
     fn cond_add(
         &self,
-        ctx: &mut RegionCtx<'_, Base>,
+        ctx: &mut RegionCtx<'_, C::Base>,
         a: &Self::Point,
         b: &Self::Point,
-        cond: &AssignedCondition<Base>,
+        cond: &AssignedCondition<C::Base>,
     ) -> Result<Self::Point, Error>;
 
     /// Performs variable-base scalar multiplication, returning `[scalar] base`.
@@ -252,9 +271,9 @@ pub trait EccInstructions<C: CurveAffine>: Chip<C::Base> + Clone + Debug {
     fn point_selection(
         &self,
         ctx: &mut RegionCtx<'_, C::Base>,
-        a_1: Coordinates<AffinePoint>,
-        a_2: Coordinates<AffinePoint>,
-        a_3: Coordinates<AffinePoint>,
+        a_1: C,
+        a_2: C,
+        a_3: C,
         bit_1: &AssignedCondition<C::Base>,
         bit_2: &AssignedCondition<C::Base>,
     ) -> Result<Self::Point, Error>;
@@ -264,22 +283,22 @@ pub trait EccInstructions<C: CurveAffine>: Chip<C::Base> + Clone + Debug {
         &self,
         ctx: &mut RegionCtx<'_, C::Base>,
         scalar: &Self::ScalarVar,
-        base: AffinePoint,
+        base: C,
     ) -> Result<Self::Point, Error>;
 }
 
 /// Structure representing a `Scalar` used in variable-base multiplication.
 #[derive(Clone, Debug)]
-pub struct ScalarVar(pub(crate) AssignedValue<Base>);
+pub struct ScalarVar(pub(crate) AssignedValue<JubjubBase>);
 
-impl EccInstructions<AffinePoint> for EccChip {
+impl EccInstructions<JubjubAffine> for EccChip {
     type ScalarVar = ScalarVar;
     type Point = AssignedEccPoint;
-    type X = AssignedValue<Base>;
+    type X = AssignedValue<JubjubBase>;
 
     fn constrain_equal(
         &self,
-        ctx: &mut RegionCtx<'_, Base>,
+        ctx: &mut RegionCtx<'_, JubjubBase>,
         a: &Self::Point,
         b: &Self::Point,
     ) -> Result<(), Error> {
@@ -291,8 +310,8 @@ impl EccInstructions<AffinePoint> for EccChip {
 
     fn witness_point(
         &self,
-        ctx: &mut RegionCtx<'_, Base>,
-        value: &Value<AffinePoint>, // todo: We allow for points not in the subgroup. Double check
+        ctx: &mut RegionCtx<'_, JubjubBase>,
+        value: &Value<JubjubAffine>, // todo: We allow for points not in the subgroup. Double check
     ) -> Result<Self::Point, Error> {
         let config = self.config().witness_point;
         config.point(ctx, value)
@@ -300,10 +319,10 @@ impl EccInstructions<AffinePoint> for EccChip {
 
     fn witness_scalar_var(
         &self,
-        ctx: &mut RegionCtx<'_, Base>,
-        value: &Value<Scalar>,
+        ctx: &mut RegionCtx<'_, JubjubBase>,
+        value: &Value<JubjubScalar>,
     ) -> Result<Self::ScalarVar, Error> {
-        let value_with_base = value.map(|v| Base::from_bytes_le(&v.to_bytes()).unwrap());
+        let value_with_base = value.map(|v| JubjubBase::from_bytes_le(&v.to_bytes()).unwrap());
         let scalar =
             ctx.assign_advice(|| "assign scalar", self.config.scalar_mul, value_with_base)?;
         ctx.next();
@@ -312,13 +331,13 @@ impl EccInstructions<AffinePoint> for EccChip {
 
     fn add(
         &self,
-        ctx: &mut RegionCtx<'_, Base>,
+        ctx: &mut RegionCtx<'_, JubjubBase>,
         lhs: &Self::Point,
         rhs: &Self::Point,
     ) -> Result<Self::Point, Error> {
         let config = self.config().add;
 
-        let cond = ctx.assign_advice(|| "bit", self.config.add.b, Value::known(Base::ONE))?;
+        let cond = ctx.assign_advice(|| "bit", self.config.add.b, Value::known(JubjubBase::ONE))?;
         self.main_gate.assert_one(ctx, &cond)?;
 
         let b = ctx.copy_advice(|| "b", self.config.add.b, cond)?; // todo: extra row :: necessary?
@@ -345,10 +364,10 @@ impl EccInstructions<AffinePoint> for EccChip {
 
     fn cond_add(
         &self,
-        ctx: &mut RegionCtx<'_, Base>,
+        ctx: &mut RegionCtx<'_, JubjubBase>,
         a: &Self::Point,
         b: &Self::Point,
-        cond: &AssignedCondition<Base>,
+        cond: &AssignedCondition<JubjubBase>,
     ) -> Result<Self::Point, Error> {
         let config = self.config().add;
         config.assign_region(ctx, a, b, cond)
@@ -356,34 +375,34 @@ impl EccInstructions<AffinePoint> for EccChip {
 
     fn mul(
         &self,
-        ctx: &mut RegionCtx<'_, Base>,
+        ctx: &mut RegionCtx<'_, JubjubBase>,
         scalar: &Self::ScalarVar, // todo: we might want to have a type for scalar
         base: &Self::Point,
     ) -> Result<Self::Point, Error> {
         // Decompose scalar into bits
         let mut decomposition = self
             .main_gate
-            .to_bits(ctx, &scalar.0, Base::NUM_BITS as usize)?;
+            .to_bits(ctx, &scalar.0, JubjubBase::NUM_BITS as usize)?;
         decomposition.reverse(); // to get MSB first
 
         // Initialise the aggregator at zero
         let assigned_0x = ctx.assign_advice(
             || "x of zero",
             self.config.add.x_pr,
-            Value::known(Base::ZERO),
+            Value::known(JubjubBase::ZERO),
         )?;
         ctx.next();
 
         let assigned_0y = ctx.assign_advice(
             || "y of zero",
             self.config.add.y_pr,
-            Value::known(Base::ONE),
+            Value::known(JubjubBase::ONE),
         )?;
-        ctx.assign_fixed(|| "base", self.main_gate.config.sb, Base::ONE)?;
+        ctx.assign_fixed(|| "base", self.main_gate.config.sb, JubjubBase::ONE)?;
         ctx.assign_fixed(
             || "s_constant",
             self.main_gate.config.s_constant,
-            -Base::ONE,
+            -JubjubBase::ONE,
         )?;
         ctx.next();
 
@@ -446,22 +465,22 @@ impl EccInstructions<AffinePoint> for EccChip {
 
     fn point_selection(
         &self,
-        ctx: &mut RegionCtx<'_, Base>,
-        a_1: Coordinates<AffinePoint>,
-        a_2: Coordinates<AffinePoint>,
-        a_3: Coordinates<AffinePoint>,
-        bit_1: &AssignedCondition<Base>,
-        bit_2: &AssignedCondition<Base>,
+        ctx: &mut RegionCtx<'_, JubjubBase>,
+        a_1: JubjubAffine,
+        a_2: JubjubAffine,
+        a_3: JubjubAffine,
+        bit_1: &AssignedCondition<JubjubBase>,
+        bit_2: &AssignedCondition<JubjubBase>,
     ) -> Result<Self::Point, Error> {
         let result_x = bit_1.value().zip(bit_2.value()).map(|(b1, b2)| {
-            if b1 == &Base::ZERO && b2 == &Base::ZERO {
-                Base::ZERO
-            } else if b1 == &Base::ONE && b2 == &Base::ZERO {
-                *a_1.x()
-            } else if b1 == &Base::ZERO && b2 == &Base::ONE {
-                *a_2.x()
-            } else if b1 == &Base::ONE && b2 == &Base::ONE {
-                *a_3.x()
+            if b1 == &JubjubBase::ZERO && b2 == &JubjubBase::ZERO {
+                JubjubBase::ZERO
+            } else if b1 == &JubjubBase::ONE && b2 == &JubjubBase::ZERO {
+                a_1.x()
+            } else if b1 == &JubjubBase::ZERO && b2 == &JubjubBase::ONE {
+                a_2.x()
+            } else if b1 == &JubjubBase::ONE && b2 == &JubjubBase::ONE {
+                a_3.x()
             } else {
                 panic!("Unexpected bit values");
             }
@@ -484,10 +503,10 @@ impl EccInstructions<AffinePoint> for EccChip {
         ctx.constrain_equal(b2.cell(), bit_2.cell())?;
 
         // Selector of the result
-        ctx.assign_fixed(|| "Res x selector", self.main_gate.config.se, -Base::ONE)?;
+        ctx.assign_fixed(|| "Res x selector", self.main_gate.config.se, -JubjubBase::ONE)?;
 
-        ctx.assign_fixed(|| "A coeff", self.main_gate.config.sa, *a_1.x())?;
-        ctx.assign_fixed(|| "B coeff", self.main_gate.config.sb, *a_2.x())?;
+        ctx.assign_fixed(|| "A coeff", self.main_gate.config.sa, a_1.x())?;
+        ctx.assign_fixed(|| "B coeff", self.main_gate.config.sb, a_2.x())?;
 
         ctx.assign_fixed(
             || "multiplication factor",
@@ -499,14 +518,14 @@ impl EccInstructions<AffinePoint> for EccChip {
 
         // We move to the next line, to handle the y coordinate
         let result_y = bit_1.value().zip(bit_2.value()).map(|(b1, b2)| {
-            if b1 == &Base::ZERO && b2 == &Base::ZERO {
-                Base::ONE
-            } else if b1 == &Base::ONE && b2 == &Base::ZERO {
-                *a_1.y()
-            } else if b1 == &Base::ZERO && b2 == &Base::ONE {
-                *a_2.y()
-            } else if b1 == &Base::ONE && b2 == &Base::ONE {
-                *a_3.y()
+            if b1 == &JubjubBase::ZERO && b2 == &JubjubBase::ZERO {
+                JubjubBase::ONE
+            } else if b1 == &JubjubBase::ONE && b2 == &JubjubBase::ZERO {
+                a_1.y()
+            } else if b1 == &JubjubBase::ZERO && b2 == &JubjubBase::ONE {
+                a_2.y()
+            } else if b1 == &JubjubBase::ONE && b2 == &JubjubBase::ONE {
+                a_3.y()
             } else {
                 panic!("Unexpected bit values");
             }
@@ -529,18 +548,18 @@ impl EccInstructions<AffinePoint> for EccChip {
         ctx.constrain_equal(b2.cell(), bit_2.cell())?;
 
         // Selector of the result
-        ctx.assign_fixed(|| "Res y selector", self.main_gate.config.se, -Base::ONE)?;
+        ctx.assign_fixed(|| "Res y selector", self.main_gate.config.se, -JubjubBase::ONE)?;
 
-        ctx.assign_fixed(|| "A coeff", self.main_gate.config.sa, a_1.y() - Base::ONE)?;
-        ctx.assign_fixed(|| "B coeff", self.main_gate.config.sb, a_2.y() - Base::ONE)?;
+        ctx.assign_fixed(|| "A coeff", self.main_gate.config.sa, a_1.y() - JubjubBase::ONE)?;
+        ctx.assign_fixed(|| "B coeff", self.main_gate.config.sb, a_2.y() - JubjubBase::ONE)?;
 
         ctx.assign_fixed(
             || "multiplication factor",
             self.main_gate.config.s_mul_ab,
-            a_3.y() - a_2.y() - a_1.y() + Base::ONE,
+            a_3.y() - a_2.y() - a_1.y() + JubjubBase::ONE,
         )?;
 
-        ctx.assign_fixed(|| "s_constant", self.main_gate.config.s_constant, Base::ONE)?;
+        ctx.assign_fixed(|| "s_constant", self.main_gate.config.s_constant, JubjubBase::ONE)?;
 
         ctx.next();
 
@@ -549,39 +568,39 @@ impl EccInstructions<AffinePoint> for EccChip {
 
     fn fixed_mul(
         &self,
-        ctx: &mut RegionCtx<'_, Base>,
+        ctx: &mut RegionCtx<'_, JubjubBase>,
         scalar: &Self::ScalarVar,
-        base: AffinePoint,
+        base: JubjubAffine,
     ) -> Result<Self::Point, Error> {
-        let l_prime = (Scalar::NUM_BITS / 2) as usize;
+        let l_prime = (JubjubScalar::NUM_BITS / 2) as usize;
         let base_points = (0..l_prime)
             .map(|power| {
-                base.mul(Scalar::from(4).pow_vartime(&[power as u64, 0, 0, 0]))
+                base.mul(JubjubScalar::from(4).pow_vartime(&[power as u64, 0, 0, 0]))
                     .to_affine()
             })
-            .collect::<Vec<AffinePoint>>();
+            .collect::<Vec<JubjubAffine>>();
         let base_points_2 = (0..l_prime)
             .map(|power| {
-                base.mul(Scalar::from(2) * Scalar::from(4).pow_vartime(&[power as u64, 0, 0, 0]))
+                base.mul(JubjubScalar::from(2) * JubjubScalar::from(4).pow_vartime(&[power as u64, 0, 0, 0]))
                     .to_affine()
             })
-            .collect::<Vec<AffinePoint>>();
+            .collect::<Vec<JubjubAffine>>();
         let base_points_3 = (0..l_prime)
             .map(|power| {
-                base.mul(Scalar::from(3) * Scalar::from(4).pow_vartime(&[power as u64, 0, 0, 0]))
+                base.mul(JubjubScalar::from(3) * JubjubScalar::from(4).pow_vartime(&[power as u64, 0, 0, 0]))
                     .to_affine()
             })
-            .collect::<Vec<AffinePoint>>();
+            .collect::<Vec<JubjubAffine>>();
 
         let scalar_binary = self
             .main_gate
-            .to_bits(ctx, &scalar.0, Scalar::NUM_BITS as usize)?;
+            .to_bits(ctx, &scalar.0, JubjubScalar::NUM_BITS as usize)?;
 
         let mut acc = self.point_selection(
             ctx,
-            base_points[0].coordinates().unwrap(),
-            base_points_2[0].coordinates().unwrap(),
-            base_points_3[0].coordinates().unwrap(),
+            base_points[0],
+            base_points_2[0],
+            base_points_3[0],
             &scalar_binary[0],
             &scalar_binary[1],
         )?;
@@ -591,9 +610,9 @@ impl EccInstructions<AffinePoint> for EccChip {
         for i in 1..l_prime - 1 {
             z = self.point_selection(
                 ctx,
-                base_points[i].coordinates().unwrap(),
-                base_points_2[i].coordinates().unwrap(),
-                base_points_3[i].coordinates().unwrap(),
+                base_points[i],
+                base_points_2[i],
+                base_points_3[i],
                 &scalar_binary[2 * i],
                 &scalar_binary[2 * i + 1],
             )?;
@@ -603,9 +622,9 @@ impl EccInstructions<AffinePoint> for EccChip {
 
         z = self.point_selection(
             ctx,
-            base_points[l_prime - 1].coordinates().unwrap(),
-            base_points_2[l_prime - 1].coordinates().unwrap(),
-            base_points_3[l_prime - 1].coordinates().unwrap(),
+            base_points[l_prime - 1],
+            base_points_2[l_prime - 1],
+            base_points_3[l_prime - 1],
             &scalar_binary[2 * l_prime - 2],
             &scalar_binary[2 * l_prime - 1],
         )?;
@@ -623,18 +642,16 @@ impl EccChip {
 
 #[cfg(test)]
 mod tests {
-    use crate::ecc::chip::{EccChip, EccConfig, EccInstructions};
+    use crate::ecc::chip::{AffinePoint, EccChip, EccConfig, EccInstructions};
     use crate::main_gate::{MainGate, MainGateConfig};
     use crate::util::RegionCtx;
+    use blstrs::{Base as JubjubBase, Fr as JubjubScalar, JubjubAffine, JubjubExtended, JubjubSubgroup};
     use ff::Field;
     use group::prime::PrimeCurveAffine;
     use group::{Curve, Group};
     use halo2_proofs::circuit::{Layouter, SimpleFloorPlanner, Value};
     use halo2_proofs::dev::MockProver;
     use halo2_proofs::plonk::{Circuit, ConstraintSystem, Error};
-    // use halo2curves::jubjub::{AffinePoint, Base, ExtendedPoint, Scalar, SubgroupPoint};
-    use blstrs::{JubjubAffine as AffinePoint, Base, JubjubExtended as ExtendedPoint, Fr as Scalar, JubjubSubgroup as SubgroupPoint};
-    use halo2curves::CurveAffine;
     use rand_chacha::ChaCha8Rng;
     use rand_core::SeedableRng;
     use std::ops::Mul;
@@ -647,11 +664,11 @@ mod tests {
 
     #[derive(Clone, Debug, Default)]
     struct TestCircuit {
-        point: AffinePoint,
-        scalar: Scalar,
+        point: JubjubAffine,
+        scalar: JubjubScalar,
     }
 
-    impl Circuit<Base> for TestCircuit {
+    impl Circuit<JubjubBase> for TestCircuit {
         type Config = TestCircuitConfig;
         type FloorPlanner = SimpleFloorPlanner;
 
@@ -659,7 +676,7 @@ mod tests {
             Self::default()
         }
 
-        fn configure(meta: &mut ConstraintSystem<Base>) -> Self::Config {
+        fn configure(meta: &mut ConstraintSystem<JubjubBase>) -> Self::Config {
             let maingate = MainGate::configure(meta);
             let ecc_config = EccChip::configure(meta, maingate.config.clone());
             // todo: do we need to enable equality?
@@ -673,7 +690,7 @@ mod tests {
         fn synthesize(
             &self,
             config: Self::Config,
-            mut layouter: impl Layouter<Base>,
+            mut layouter: impl Layouter<JubjubBase>,
         ) -> Result<(), Error> {
             let main_gate = MainGate::new(config.maingate_config);
             let ecc_chip = EccChip::new(main_gate, config.ecc_config);
@@ -712,8 +729,8 @@ mod tests {
         const K: u32 = 11;
 
         let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
-        let point = ExtendedPoint::random(&mut rng);
-        let scalar = Scalar::random(&mut rng);
+        let point = JubjubExtended::random(&mut rng);
+        let scalar = JubjubScalar::random(&mut rng);
         let res = point.mul(&scalar);
 
         let circuit = TestCircuit {
@@ -721,8 +738,8 @@ mod tests {
             scalar,
         };
 
-        let res_coords = res.to_affine().coordinates().unwrap();
-        let pi = vec![vec![*res_coords.x(), *res_coords.y()]];
+        let res_coords = res.to_affine();
+        let pi = vec![vec![res_coords.x(), res_coords.y()]];
 
         let prover =
             MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
@@ -730,10 +747,10 @@ mod tests {
         prover.verify().unwrap();
         assert!(prover.verify().is_ok());
 
-        let random_result = ExtendedPoint::random(&mut rng);
-        let random_res_coords = random_result.to_affine().coordinates().unwrap();
+        let random_result = JubjubExtended::random(&mut rng);
+        let random_res_coords = random_result.to_affine();
 
-        let pi = vec![vec![*random_res_coords.x(), *random_res_coords.y()]];
+        let pi = vec![vec![random_res_coords.x(), random_res_coords.y()]];
 
         let prover =
             MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
@@ -741,14 +758,14 @@ mod tests {
         assert!(prover.verify().is_err());
 
         // mult by one
-        let scalar = Scalar::one();
+        let scalar = JubjubScalar::one();
         let circuit = TestCircuit {
             point: point.to_affine(),
             scalar,
         };
 
-        let res_coords = point.to_affine().coordinates().unwrap();
-        let pi = vec![vec![*res_coords.x(), *res_coords.y()]];
+        let res_coords = point.to_affine();
+        let pi = vec![vec![res_coords.x(), res_coords.y()]];
 
         let prover =
             MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
@@ -756,13 +773,13 @@ mod tests {
         assert!(prover.verify().is_ok());
 
         // mult by zero
-        let scalar = Scalar::zero();
+        let scalar = JubjubScalar::zero();
         let circuit = TestCircuit {
             point: point.to_affine(),
             scalar,
         };
 
-        let pi = vec![vec![Base::ZERO, Base::ONE]];
+        let pi = vec![vec![JubjubBase::ZERO, JubjubBase::ONE]];
 
         let prover =
             MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
@@ -772,10 +789,10 @@ mod tests {
 
     #[derive(Clone, Debug, Default)]
     struct TestCircuitFixed {
-        scalar: Scalar,
+        scalar: JubjubScalar,
     }
 
-    impl Circuit<Base> for TestCircuitFixed {
+    impl Circuit<JubjubBase> for TestCircuitFixed {
         type Config = TestCircuitConfig;
         type FloorPlanner = SimpleFloorPlanner;
 
@@ -783,7 +800,7 @@ mod tests {
             Self::default()
         }
 
-        fn configure(meta: &mut ConstraintSystem<Base>) -> Self::Config {
+        fn configure(meta: &mut ConstraintSystem<JubjubBase>) -> Self::Config {
             let maingate = MainGate::configure(meta);
             let ecc_config = EccChip::configure(meta, maingate.config.clone());
             // todo: do we need to enable equality?
@@ -797,7 +814,7 @@ mod tests {
         fn synthesize(
             &self,
             config: Self::Config,
-            mut layouter: impl Layouter<Base>,
+            mut layouter: impl Layouter<JubjubBase>,
         ) -> Result<(), Error> {
             let main_gate = MainGate::new(config.maingate_config);
             let ecc_chip = EccChip::new(main_gate, config.ecc_config);
@@ -813,7 +830,7 @@ mod tests {
                     ecc_chip.fixed_mul(
                         &mut ctx,
                         &assigned_scalar,
-                        ExtendedPoint::from(SubgroupPoint::generator()).to_affine(),
+                        JubjubExtended::from(JubjubSubgroup::generator()).to_affine(),
                     )
                 },
             )?;
@@ -838,14 +855,14 @@ mod tests {
         const K: u32 = 11;
 
         let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
-        let point = ExtendedPoint::from(SubgroupPoint::generator());
-        let scalar = Scalar::random(&mut rng);
+        let point = JubjubExtended::from(JubjubSubgroup::generator());
+        let scalar = JubjubScalar::random(&mut rng);
         let res = point.mul(&scalar);
 
         let circuit = TestCircuitFixed { scalar };
 
-        let res_coords = res.to_affine().coordinates().unwrap();
-        let pi = vec![vec![*res_coords.x(), *res_coords.y()]];
+        let res_coords = res.to_affine();
+        let pi = vec![vec![res_coords.x(), res_coords.y()]];
 
         let prover =
             MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
@@ -853,10 +870,10 @@ mod tests {
         prover.verify().unwrap();
         assert!(prover.verify().is_ok());
 
-        let random_result = ExtendedPoint::random(&mut rng);
-        let random_res_coords = random_result.to_affine().coordinates().unwrap();
+        let random_result = JubjubExtended::random(&mut rng);
+        let random_res_coords = random_result.to_affine();
 
-        let pi = vec![vec![*random_res_coords.x(), *random_res_coords.y()]];
+        let pi = vec![vec![random_res_coords.x(), random_res_coords.y()]];
 
         let prover =
             MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
@@ -864,11 +881,11 @@ mod tests {
         assert!(prover.verify().is_err());
 
         // mult by one
-        let scalar = Scalar::one();
+        let scalar = JubjubScalar::one();
         let circuit = TestCircuitFixed { scalar };
 
-        let res_coords = point.to_affine().coordinates().unwrap();
-        let pi = vec![vec![*res_coords.x(), *res_coords.y()]];
+        let res_coords = point.to_affine();
+        let pi = vec![vec![res_coords.x(), res_coords.y()]];
 
         let prover =
             MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
@@ -876,10 +893,10 @@ mod tests {
         assert!(prover.verify().is_ok());
 
         // mult by zero
-        let scalar = Scalar::zero();
+        let scalar = JubjubScalar::zero();
         let circuit = TestCircuitFixed { scalar };
 
-        let pi = vec![vec![Base::ZERO, Base::ONE]];
+        let pi = vec![vec![JubjubBase::ZERO, JubjubBase::ONE]];
 
         let prover =
             MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");

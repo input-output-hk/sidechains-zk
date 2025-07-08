@@ -1,21 +1,14 @@
 use super::AssignedEccPoint;
 use crate::util::RegionCtx;
 use crate::AssignedCondition;
+use blstrs::{Base, Scalar};
 use ff::{Field, PrimeField};
-use halo2_proofs::circuit::Value;
+use halo2_proofs::utils::rational::Rational;
 use halo2_proofs::{
-    circuit::Region,
     plonk::{Advice, Column, ConstraintSystem, Constraints, Error, Expression, Selector},
     poly::Rotation,
 };
-//use halo2curves::bls12_381::Scalar;
-//use halo2curves::jubjub;
-use blstrs::{Base, Scalar};
-use blstrs::Base as Fq;
-use blstrs::Fr;
-
 use std::collections::HashSet;
-use halo2_proofs::utils::rational::Rational;
 // The twisted Edwards addition law is defined as follows:
 //
 //
@@ -54,7 +47,7 @@ use halo2_proofs::utils::rational::Rational;
 // y_r * (1 - b * d * x_p * x_q * y_p * y_q) - (y_p + b * (y_p * y_q + x_p * x_q - y_p)) = 0
 
 // `d = -(10240/10241)`
-pub(crate) const EDWARDS_D: Fq = Fq::from_raw([
+pub(crate) const EDWARDS_D: Base = Base::from_raw([
     0x0106_5fd6_d634_3eb1,
     0x292d_7f6d_3757_9d26,
     0xf5fd_9207_e6bd_7fd4,
@@ -231,16 +224,14 @@ impl CondAddConfig {
 
 #[cfg(test)]
 mod tests {
-    use crate::ecc::chip::{EccChip, EccConfig, EccInstructions};
+    use crate::ecc::chip::{AffinePoint, EccChip, EccConfig, EccInstructions};
     use crate::main_gate::{MainGate, MainGateConfig};
     use crate::util::RegionCtx;
+    use blstrs::{Base, JubjubAffine, JubjubExtended};
     use group::{Curve, Group};
     use halo2_proofs::circuit::{Layouter, SimpleFloorPlanner, Value};
     use halo2_proofs::dev::MockProver;
     use halo2_proofs::plonk::{Circuit, ConstraintSystem, Error};
-    //use halo2curves::jubjub::{AffinePoint, Base, ExtendedPoint};
-    use blstrs::{JubjubAffine as AffinePoint, Base, JubjubExtended as ExtendedPoint};
-    use halo2curves::CurveAffine;
     use rand_chacha::ChaCha8Rng;
     use rand_core::SeedableRng;
 
@@ -252,8 +243,8 @@ mod tests {
 
     #[derive(Clone, Debug, Default)]
     struct TestCircuit {
-        point_a: AffinePoint,
-        point_b: AffinePoint,
+        point_a: JubjubAffine,
+        point_b: JubjubAffine,
     }
 
     impl Circuit<Base> for TestCircuit {
@@ -319,16 +310,16 @@ mod tests {
         const K: u32 = 4;
 
         // useful for debugging
-        let _print_coords = |a: ExtendedPoint, name: &str| {
+        let _print_coords = |a: JubjubExtended, name: &str| {
             println!(
                 "Coordinates {name}: {:?}",
-                a.to_affine().coordinates().unwrap()
+                a.to_affine()
             );
         };
 
         let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
-        let lhs = ExtendedPoint::random(&mut rng);
-        let rhs = ExtendedPoint::random(&mut rng);
+        let lhs = JubjubExtended::random(&mut rng);
+        let rhs = JubjubExtended::random(&mut rng);
         let res = lhs + rhs;
 
         let circuit = TestCircuit {
@@ -336,8 +327,8 @@ mod tests {
             point_b: rhs.to_affine(),
         };
 
-        let res_coords = res.to_affine().coordinates().unwrap();
-        let pi = vec![vec![*res_coords.x(), *res_coords.y()]];
+        let res_coords = res.to_affine();
+        let pi = vec![vec![res_coords.x(), res_coords.y()]];
 
         let prover =
             MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
