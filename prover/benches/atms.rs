@@ -7,31 +7,26 @@ use atms_halo2::{
     signatures::schnorr::SchnorrSig,
     util::RegionCtx,
 };
+use blake2b_simd::State as Blake2bState;
+use blstrs::{Base, JubjubAffine as AffinePoint};
+use blstrs::Bls12;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use ff::Field;
-use halo2_proofs::poly::commitment::Params;
+use halo2_proofs::plonk::k_from_circuit;
+use halo2_proofs::poly::kzg::KZGCommitmentScheme;
+use halo2_proofs::utils::SerdeFormat;
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{create_proof, keygen_pk, keygen_vk, Circuit, ConstraintSystem, Error},
-    poly::{commitment::Guard, kzg::params::ParamsKZG},
+    poly::kzg::params::ParamsKZG,
     transcript::{CircuitTranscript, Transcript},
 };
-// use halo2curves::bls12_381::Bls12;
-// use halo2curves::jubjub::{AffinePoint, Base};
-use blstrs::{Bls12, BlsScalar};
-use blstrs::{JubjubAffine as AffinePoint, Base};
 use rand::prelude::IteratorRandom;
 use rand_chacha::ChaCha8Rng;
 use rand_core::SeedableRng;
 use std::fs::{create_dir_all, File};
-use std::io::{BufReader, Write, Read};
+use std::io::{BufReader, Write};
 use std::path::Path;
-use std::io;
-use halo2_proofs::utils::helpers::ProcessedSerdeObject;
-use blake2b_simd::{State as Blake2bState, State};
-use halo2_proofs::plonk::k_from_circuit;
-use halo2_proofs::poly::kzg::KZGCommitmentScheme;
-use halo2_proofs::utils::SerdeFormat;
 
 #[derive(Clone)]
 struct BenchCircuitConfig {
@@ -138,7 +133,7 @@ impl Circuit<Base> for BenchCircuitAtmsSignature {
     }
 }
 
-fn atms_bench_helper(c: &mut Criterion, k: u32, num_parties: usize, threshold: usize) {
+fn atms_bench_helper(c: &mut Criterion, num_parties: usize, threshold: usize) {
     let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
     let msg = Base::random(&mut rng);
 
@@ -224,25 +219,25 @@ fn atms_bench_helper(c: &mut Criterion, k: u32, num_parties: usize, threshold: u
 }
 
 fn atms_3_of_6(c: &mut Criterion) {
-    atms_bench_helper(c, 14, 6, 3)
+    atms_bench_helper(c,6, 3)
 }
 fn atms_6_of_9(c: &mut Criterion) {
-    atms_bench_helper(c, 15, 9, 6)
+    atms_bench_helper(c, 9, 6)
 }
 fn atms_8_of_9(c: &mut Criterion) {
-    atms_bench_helper(c, 15, 9, 8)
+    atms_bench_helper(c, 9, 8)
 }
 fn atms_14_of_14(c: &mut Criterion) {
-    atms_bench_helper(c, 16, 15, 15)
+    atms_bench_helper(c, 15, 15)
 }
 fn atms_14_of_21(c: &mut Criterion) {
-    atms_bench_helper(c, 16, 21, 14)
+    atms_bench_helper(c, 21, 14)
 }
 fn atms_17_of_21(c: &mut Criterion) {
-    atms_bench_helper(c, 17, 21, 17)
+    atms_bench_helper(c, 21, 17)
 }
 fn atms_28_of_42(c: &mut Criterion) {
-    atms_bench_helper(c, 17, 42, 28)
+    atms_bench_helper(c, 42, 28)
 }
 
 criterion_group! {
