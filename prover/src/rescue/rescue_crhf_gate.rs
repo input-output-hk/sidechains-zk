@@ -149,7 +149,7 @@ mod tests {
     use halo2_proofs::circuit::{Layouter, SimpleFloorPlanner, Value};
     use halo2_proofs::dev::MockProver;
     use halo2_proofs::plonk::Circuit;
-    use halo2curves::bls12_381::Scalar;
+    use blstrs::Scalar;
 
     #[derive(Clone)]
     struct TestCircuitConfig {

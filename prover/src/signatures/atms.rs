@@ -19,7 +19,7 @@ use crate::AssignedValue;
 use ff::Field;
 use halo2_proofs::circuit::{Chip, Value};
 use halo2_proofs::plonk::{ConstraintSystem, Error};
-use halo2curves::jubjub::Base;
+use blstrs::Base;
 
 /// Configuration for `AtmsVerifierGate`.
 ///
@@ -95,7 +95,7 @@ impl AtmsVerifierGate {
                 counter = self.schnorr_gate.ecc_gate.main_gate.add_constant(
                     ctx,
                     &counter,
-                    Base::one(),
+                    Base::ONE,
                 )?;
             }
         }
@@ -131,17 +131,12 @@ mod tests {
     use group::{Curve, Group};
     use halo2_proofs::circuit::{Layouter, SimpleFloorPlanner};
     use halo2_proofs::dev::MockProver;
-    use halo2_proofs::plonk::{create_proof, keygen_pk, keygen_vk, verify_proof, Circuit};
-    use halo2_proofs::poly::commitment::Prover;
-    use halo2_proofs::poly::kzg::commitment::{KZGCommitmentScheme, ParamsKZG};
-    use halo2_proofs::poly::kzg::multiopen::{ProverGWC, VerifierGWC};
-    use halo2_proofs::poly::kzg::strategy::AccumulatorStrategy;
-    use halo2_proofs::poly::VerificationStrategy;
-    use halo2_proofs::transcript::{
-        Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
+    use halo2_proofs::{
+        plonk::{create_proof, keygen_pk, keygen_vk, prepare, Circuit},
+        poly::{commitment::Guard, kzg::params::ParamsKZG},
+        transcript::{CircuitTranscript, Transcript},
     };
-    use halo2curves::bls12_381::Bls12;
-    use halo2curves::jubjub::{AffinePoint, ExtendedPoint, Scalar, SubgroupPoint};
+    use blstrs::{Bls12, JubjubAffine, JubjubExtended, JubjubSubgroup};
     use rand::prelude::IteratorRandom;
     use rand_chacha::ChaCha8Rng;
     use rand_core::SeedableRng;
@@ -156,7 +151,7 @@ mod tests {
     #[derive(Default)]
     struct TestCircuitAtmsSignature {
         signatures: Vec<Option<SchnorrSig>>,
-        pks: Vec<AffinePoint>,
+        pks: Vec<JubjubAffine>,
         pks_comm: Base,
         msg: Base,
         threshold: Base,
@@ -264,7 +259,7 @@ mod tests {
         const THRESHOLD: usize = 72;
 
         let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
-        let generator = ExtendedPoint::from(SubgroupPoint::generator());
+        let generator = JubjubExtended::from(JubjubSubgroup::generator());
         let msg = Base::random(&mut rng);
 
         let keypairs = (0..NUM_PARTIES)

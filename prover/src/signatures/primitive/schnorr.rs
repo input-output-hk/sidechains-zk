@@ -11,17 +11,17 @@ use crate::rescue::{RescueParametersBls, RescueSponge};
 use crate::signatures::schnorr::SchnorrSig;
 use ff::Field;
 use group::{Curve, Group};
-use halo2curves::jubjub::{AffinePoint, Base, ExtendedPoint, Scalar, SubgroupPoint};
-use halo2curves::CurveAffine;
+use blstrs::{JubjubAffine, Base, JubjubExtended, Fr as JubJubScalar, JubjubSubgroup};
 use rand_core::{CryptoRng, RngCore};
 use std::fmt::Error;
 use std::ops::{Add, Mul};
+use crate::ecc::chip::AffinePoint;
 
 #[derive(Debug)]
 pub struct Schnorr;
 
-fn generator() -> ExtendedPoint {
-    ExtendedPoint::from(SubgroupPoint::generator())
+fn generator() -> JubjubExtended {
+    JubjubExtended::from(JubjubSubgroup::generator())
 }
 
 impl Schnorr {
@@ -32,8 +32,8 @@ impl Schnorr {
     /// field of `jubjub` curve.
     /// Compute the public key as an affine elliptic curve point. $sk \cdot G$.
     /// Return the key pair `(sk, pk)`.
-    pub fn keygen<R: CryptoRng + RngCore>(rng: &mut R) -> (Scalar, AffinePoint) {
-        let sk = Scalar::random(rng);
+    pub fn keygen<R: CryptoRng + RngCore>(rng: &mut R) -> (JubJubScalar, JubjubAffine) {
+        let sk = JubJubScalar::random(rng);
         let pk = generator().mul(sk).to_affine();
 
         (sk, pk)
@@ -44,16 +44,16 @@ impl Schnorr {
     /// See Schnorr signature scheme [$sign$][crate::docs::schnorr#sign] algorithm.
     #[doc = include_str!("../../../docs/signatures/schnorr/primitive-sign.md")]
     pub fn sign<R: CryptoRng + RngCore>(
-        key_pair: (Scalar, AffinePoint),
+        key_pair: (JubJubScalar, JubjubAffine),
         msg: Base,
         rng: &mut R,
     ) -> SchnorrSig {
-        let k = Scalar::random(rng);
+        let k = JubJubScalar::random(rng);
         let announcement = generator().mul(k).to_affine();
 
         let input_hash = [
-            *announcement.coordinates().unwrap().x(),
-            *key_pair.1.coordinates().unwrap().x(),
+            announcement.x(),
+            key_pair.1.x(),
             msg,
         ];
 
@@ -61,8 +61,8 @@ impl Schnorr {
 
         // we need to have some wide bytes to reduce the challenge.
         let mut wide_bytes = [0u8; 64];
-        wide_bytes[..32].copy_from_slice(&challenge.to_bytes());
-        let reduced_challenge = Scalar::from_bytes_wide(&wide_bytes);
+        wide_bytes[..32].copy_from_slice(&challenge.to_bytes_le());
+        let reduced_challenge = JubJubScalar::from_bytes_wide(&wide_bytes);
 
         let response = k + reduced_challenge * key_pair.0;
         (announcement, response)
@@ -71,10 +71,10 @@ impl Schnorr {
     /// Schnorr verify signature.
     /// See Schnorr signature scheme [$verify$](crate::docs::schnorr#verify) algorithm.
     #[doc = include_str!("../../../docs/signatures/schnorr/primitive-verify.md")]
-    pub fn verify(msg: Base, pk: AffinePoint, sig: SchnorrSig) -> Result<(), Error> {
+    pub fn verify(msg: Base, pk: JubjubAffine, sig: SchnorrSig) -> Result<(), Error> {
         let input_hash = [
-            *sig.0.coordinates().unwrap().x(),
-            *pk.coordinates().unwrap().x(),
+            sig.0.x(),
+            pk.x(),
             msg,
         ];
 
@@ -82,8 +82,8 @@ impl Schnorr {
 
         // we need to have some wide bytes to reduce the challenge.
         let mut wide_bytes = [0u8; 64];
-        wide_bytes[..32].copy_from_slice(&challenge.to_bytes());
-        let reduced_challenge = Scalar::from_bytes_wide(&wide_bytes);
+        wide_bytes[..32].copy_from_slice(&challenge.to_bytes_le());
+        let reduced_challenge = JubJubScalar::from_bytes_wide(&wide_bytes);
 
         if generator().mul(sig.1) == sig.0.add(pk.mul(reduced_challenge).to_affine()) {
             Ok(())
@@ -112,7 +112,7 @@ mod tests {
         let fake_msg = Base::random(&mut rng);
         assert!(Schnorr::verify(fake_msg, pk, sig).is_err());
 
-        let fake_pk = ExtendedPoint::random(&mut rng).to_affine();
+        let fake_pk = JubjubExtended::random(&mut rng).to_affine();
         assert!(Schnorr::verify(msg, fake_pk, sig).is_err());
     }
 }

@@ -1,17 +1,14 @@
 use super::AssignedEccPoint;
 use crate::util::RegionCtx;
 use crate::AssignedCondition;
-use ff::PrimeField;
-use halo2_proofs::circuit::Value;
+use blstrs::Base as JubjubBase;
+use ff::{Field, PrimeField};
+use halo2_proofs::utils::rational::Rational;
 use halo2_proofs::{
-    circuit::Region,
-    plonk::{Advice, Assigned, Column, ConstraintSystem, Constraints, Error, Expression, Selector},
+    plonk::{Advice, Column, ConstraintSystem, Constraints, Error, Expression, Selector},
     poly::Rotation,
 };
-use halo2curves::bls12_381::Scalar;
-use halo2curves::jubjub;
 use std::collections::HashSet;
-
 // The twisted Edwards addition law is defined as follows:
 //
 //
@@ -50,7 +47,7 @@ use std::collections::HashSet;
 // y_r * (1 - b * d * x_p * x_q * y_p * y_q) - (y_p + b * (y_p * y_q + x_p * x_q - y_p)) = 0
 
 // `d = -(10240/10241)`
-pub(crate) const EDWARDS_D: jubjub::Fq = jubjub::Fq::from_raw([
+pub(crate) const EDWARDS_D: JubjubBase = JubjubBase::from_raw([
     0x0106_5fd6_d634_3eb1,
     0x292d_7f6d_3757_9d26,
     0xf5fd_9207_e6bd_7fd4,
@@ -74,7 +71,7 @@ pub struct CondAddConfig {
 
 impl CondAddConfig {
     pub(crate) fn configure(
-        meta: &mut ConstraintSystem<jubjub::Base>,
+        meta: &mut ConstraintSystem<JubjubBase>,
         b: Column<Advice>,
         x_pr: Column<Advice>,
         y_pr: Column<Advice>,
@@ -111,7 +108,7 @@ impl CondAddConfig {
         [self.x_pr, self.y_pr].into_iter().collect()
     }
 
-    fn create_gate(&self, meta: &mut ConstraintSystem<jubjub::Base>) {
+    fn create_gate(&self, meta: &mut ConstraintSystem<JubjubBase>) {
         meta.create_gate("complete addition", |meta| {
             let q_add = meta.query_selector(self.q_add);
             let b = meta.query_advice(self.b, Rotation::cur());
@@ -123,9 +120,9 @@ impl CondAddConfig {
             let y_r = meta.query_advice(self.y_pr, Rotation::next());
 
             // Useful constants
-            let one = Expression::Constant(jubjub::Base::one());
-            let two = Expression::Constant(jubjub::Base::from(2));
-            let three = Expression::Constant(jubjub::Base::from(3));
+            let one = Expression::Constant(JubjubBase::ONE);
+            let two = Expression::Constant(JubjubBase::from(2));
+            let three = Expression::Constant(JubjubBase::from(3));
             let edwards_d = Expression::Constant(EDWARDS_D);
 
             // Useful composite expressions
@@ -172,10 +169,10 @@ impl CondAddConfig {
     /// | b | Px | Py | Qx | Qy |
     pub(super) fn assign_region(
         &self,
-        ctx: &mut RegionCtx<'_, jubjub::Base>,
+        ctx: &mut RegionCtx<'_, JubjubBase>,
         p: &AssignedEccPoint,
         q: &AssignedEccPoint,
-        b: &AssignedCondition<jubjub::Base>,
+        b: &AssignedCondition<JubjubBase>,
     ) -> Result<AssignedEccPoint, Error> {
         // Enable `q_add` selector
         ctx.enable(self.q_add)?;
@@ -194,11 +191,11 @@ impl CondAddConfig {
             .map(|((((b, x_p), y_p), x_q), y_q)| {
                 {
                     // λ = (b * d * x_p * x_q * y_p * y_q)
-                    let lambda = Assigned::from(EDWARDS_D) * *b * *x_p * *x_q * *y_p * *y_q;
+                    let lambda = Rational::from(EDWARDS_D) * *b * *x_p * *x_q * *y_p * *y_q;
                     // α = inv0(1 + d x_p x_qr y_p y_qr)
-                    let alpha = (Assigned::from(Scalar::one()) + lambda).invert();
+                    let alpha = (Rational::from(JubjubBase::ONE) + lambda).invert();
                     // β = inv0(1 - d x_p x_qr y_p y_qr)
-                    let beta = (Assigned::from(Scalar::one()) - lambda).invert();
+                    let beta = (Rational::from(JubjubBase::ONE) - lambda).invert();
                     // x_r = (x_p + b * (x_p * y_q + x_q * y_p - x_p) * (1 + lambda)^{-1}
                     let x_r = alpha * (*x_p + *b * (*x_p * *y_q + *x_q * *y_p - *x_p));
                     // y_r = (y_p + b * (x_p * x_q + y_p * y_q - y_p)) * (1 - lambda)^{-1}
@@ -227,15 +224,14 @@ impl CondAddConfig {
 
 #[cfg(test)]
 mod tests {
-    use crate::ecc::chip::{EccChip, EccConfig, EccInstructions};
+    use crate::ecc::chip::{AffinePoint, EccChip, EccConfig, EccInstructions};
     use crate::main_gate::{MainGate, MainGateConfig};
     use crate::util::RegionCtx;
+    use blstrs::{Base as JubjubBase, JubjubAffine, JubjubExtended};
     use group::{Curve, Group};
     use halo2_proofs::circuit::{Layouter, SimpleFloorPlanner, Value};
     use halo2_proofs::dev::MockProver;
     use halo2_proofs::plonk::{Circuit, ConstraintSystem, Error};
-    use halo2curves::jubjub::{AffinePoint, Base, ExtendedPoint};
-    use halo2curves::CurveAffine;
     use rand_chacha::ChaCha8Rng;
     use rand_core::SeedableRng;
 
@@ -247,11 +243,11 @@ mod tests {
 
     #[derive(Clone, Debug, Default)]
     struct TestCircuit {
-        point_a: AffinePoint,
-        point_b: AffinePoint,
+        point_a: JubjubAffine,
+        point_b: JubjubAffine,
     }
 
-    impl Circuit<Base> for TestCircuit {
+    impl Circuit<JubjubBase> for TestCircuit {
         type Config = TestCircuitConfig;
         type FloorPlanner = SimpleFloorPlanner;
 
@@ -259,7 +255,7 @@ mod tests {
             Self::default()
         }
 
-        fn configure(meta: &mut ConstraintSystem<Base>) -> Self::Config {
+        fn configure(meta: &mut ConstraintSystem<JubjubBase>) -> Self::Config {
             let maingate = MainGate::configure(meta);
             let ecc_config = EccChip::configure(meta, maingate.config.clone());
             // todo: do we need to enable equality?
@@ -275,7 +271,7 @@ mod tests {
         fn synthesize(
             &self,
             config: Self::Config,
-            mut layouter: impl Layouter<Base>,
+            mut layouter: impl Layouter<JubjubBase>,
         ) -> Result<(), Error> {
             let main_gate = MainGate::new(config.maingate_config);
             let ecc_chip = EccChip::new(main_gate, config.ecc_config);
@@ -314,16 +310,16 @@ mod tests {
         const K: u32 = 4;
 
         // useful for debugging
-        let _print_coords = |a: ExtendedPoint, name: &str| {
+        let _print_coords = |a: JubjubExtended, name: &str| {
             println!(
                 "Coordinates {name}: {:?}",
-                a.to_affine().coordinates().unwrap()
+                a.to_affine()
             );
         };
 
         let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
-        let lhs = ExtendedPoint::random(&mut rng);
-        let rhs = ExtendedPoint::random(&mut rng);
+        let lhs = JubjubExtended::random(&mut rng);
+        let rhs = JubjubExtended::random(&mut rng);
         let res = lhs + rhs;
 
         let circuit = TestCircuit {
@@ -331,8 +327,8 @@ mod tests {
             point_b: rhs.to_affine(),
         };
 
-        let res_coords = res.to_affine().coordinates().unwrap();
-        let pi = vec![vec![*res_coords.x(), *res_coords.y()]];
+        let res_coords = res.to_affine();
+        let pi = vec![vec![res_coords.x(), res_coords.y()]];
 
         let prover =
             MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");

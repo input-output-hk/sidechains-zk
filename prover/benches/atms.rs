@@ -7,18 +7,20 @@ use atms_halo2::{
     signatures::schnorr::SchnorrSig,
     util::RegionCtx,
 };
+use blake2b_simd::State as Blake2bState;
+use blstrs::{Base, JubjubAffine as AffinePoint};
+use blstrs::Bls12;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use ff::Field;
-use halo2_proofs::poly::commitment::Params;
+use halo2_proofs::plonk::k_from_circuit;
+use halo2_proofs::poly::kzg::KZGCommitmentScheme;
+use halo2_proofs::utils::SerdeFormat;
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{create_proof, keygen_pk, keygen_vk, Circuit, ConstraintSystem, Error},
-    poly::kzg::commitment::{KZGCommitmentScheme, ParamsKZG},
-    poly::kzg::multiopen::ProverGWC,
-    transcript::{Blake2bWrite, Challenge255, TranscriptWriterBuffer},
+    poly::kzg::params::ParamsKZG,
+    transcript::{CircuitTranscript, Transcript},
 };
-use halo2curves::bls12_381::Bls12;
-use halo2curves::jubjub::{AffinePoint, Base};
 use rand::prelude::IteratorRandom;
 use rand_chacha::ChaCha8Rng;
 use rand_core::SeedableRng;
@@ -131,7 +133,7 @@ impl Circuit<Base> for BenchCircuitAtmsSignature {
     }
 }
 
-fn atms_bench_helper(c: &mut Criterion, k: u32, num_parties: usize, threshold: usize) {
+fn atms_bench_helper(c: &mut Criterion, num_parties: usize, threshold: usize) {
     let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
     let msg = Base::random(&mut rng);
 
@@ -167,6 +169,8 @@ fn atms_bench_helper(c: &mut Criterion, k: u32, num_parties: usize, threshold: u
         threshold: Base::from(threshold as u64),
     };
 
+    let k: u32 = k_from_circuit(&circuit);
+
     // Create parent directory for assets
     create_dir_all("./benches/atms_assets").expect("Failed to create sha256_assets directory");
 
@@ -174,10 +178,11 @@ fn atms_bench_helper(c: &mut Criterion, k: u32, num_parties: usize, threshold: u
     let params_path = format!("./benches/atms_assets/atms_params_{}", k);
 
     if File::open(Path::new(&params_path)).is_err() {
-        let kzg_params = ParamsKZG::<Bls12>::setup(k, &mut rng);
+        let kzg_params = ParamsKZG::<Bls12>::unsafe_setup(k, &mut rng);
         let mut buf = Vec::new();
 
-        kzg_params.write(&mut buf).expect("Failed to write params");
+        kzg_params.write_custom(&mut buf, SerdeFormat::RawBytesUnchecked).expect("Failed to write params");
+
         let mut file =
             File::create(Path::new(&params_path)).expect("Failed to create sha256_params");
 
@@ -187,16 +192,18 @@ fn atms_bench_helper(c: &mut Criterion, k: u32, num_parties: usize, threshold: u
 
     let params_fs = File::open(Path::new(&params_path)).expect("couldn't load sha256_params");
 
-    let kzg_params = ParamsKZG::<Bls12>::read::<_>(&mut BufReader::new(params_fs))
-        .expect("Failed to read params");
+    let kzg_params = ParamsKZG::<Bls12>::read_custom(&mut BufReader::new(params_fs), SerdeFormat::RawBytesUnchecked).expect("Failed to read params");
+
+    // let kzg_params: ParamsKZG<Bls12> = ParamsKZG::<Bls12>::unsafe_setup(k, rng.clone());
     let vk = keygen_vk(&kzg_params, &circuit).unwrap();
-    let pk = keygen_pk(&kzg_params, vk, &circuit).unwrap();
+    let pk = keygen_pk(vk, &circuit).unwrap();
 
     let mut group = c.benchmark_group("ATMS");
     group.bench_function(BenchmarkId::new("Proof generation", threshold), |b| {
         b.iter(|| {
-            let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
-            create_proof::<KZGCommitmentScheme<_>, ProverGWC<_>, _, _, _, _>(
+            let mut transcript: CircuitTranscript<Blake2bState> =
+                CircuitTranscript::<Blake2bState>::init();
+            create_proof::<Base, KZGCommitmentScheme<_>, _, _>(
                 &kzg_params,
                 &pk,
                 &[circuit.clone()],
@@ -212,25 +219,25 @@ fn atms_bench_helper(c: &mut Criterion, k: u32, num_parties: usize, threshold: u
 }
 
 fn atms_3_of_6(c: &mut Criterion) {
-    atms_bench_helper(c, 14, 6, 3)
+    atms_bench_helper(c,6, 3)
 }
 fn atms_6_of_9(c: &mut Criterion) {
-    atms_bench_helper(c, 15, 9, 6)
+    atms_bench_helper(c, 9, 6)
 }
 fn atms_8_of_9(c: &mut Criterion) {
-    atms_bench_helper(c, 15, 9, 8)
+    atms_bench_helper(c, 9, 8)
 }
 fn atms_14_of_14(c: &mut Criterion) {
-    atms_bench_helper(c, 16, 15, 15)
+    atms_bench_helper(c, 15, 15)
 }
 fn atms_14_of_21(c: &mut Criterion) {
-    atms_bench_helper(c, 16, 21, 14)
+    atms_bench_helper(c, 21, 14)
 }
 fn atms_17_of_21(c: &mut Criterion) {
-    atms_bench_helper(c, 17, 21, 17)
+    atms_bench_helper(c, 21, 17)
 }
 fn atms_28_of_42(c: &mut Criterion) {
-    atms_bench_helper(c, 17, 42, 28)
+    atms_bench_helper(c, 42, 28)
 }
 
 criterion_group! {
