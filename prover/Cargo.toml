@@ -12,7 +12,7 @@ bls12_381 = { version = "0.8.0", features = ["groups"] }
 ff = "0.13.0"
 jubjub = "0.10.0"
 halo2curves = { version = "0.7.0" }
-halo2_proofs = { git = "https://github.com/input-output-hk/halo2", rev = "0bca06e58937fbe213a0530ecac9d8e0fed501d6", features = ["plutus_debug"] }
+halo2_proofs = { git = "https://github.com/input-output-hk/halo2", rev = "0bca06e58937fbe213a0530ecac9d8e0fed501d6"}
 blstrs = { git = "https://github.com/davidnevadoc/blstrs", rev = "3dfe5bf" }
 blake2b_simd = "1" # MSRV 1.66.0
 paste = "1"
