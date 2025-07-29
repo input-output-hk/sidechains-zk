@@ -17,11 +17,13 @@ The implementation leverages SNARK-friendly cryptographic primitives:
 - **Digital Signature**: Schnorr signatures over JubJub curve
 - **Hash Function**: Rescue hash for SNARK-friendly operations
 
-> ### ⚠️ Security Disclaimer
+> ### ⚠️ Important Disclaimer & Acceptance of Risk
 >
-> **This is a proof-of-concept implementation that has not undergone security auditing.** This code is provided for
-> research and educational purposes only. Do not use this implementation in production environments or for securing real
-> assets without proper security review and auditing.
+> **This is a proof-of-concept implementation that has not undergone security auditing.** This code is provided "as is"
+> for research and educational purposes only. It has not been subjected to a formal security review or audit and may
+> contain vulnerabilities.  **Do not use this code in production systems or any environment where security is critical
+> without conducting your own thorough security assessment.**  By using this code, you acknowledge and accept all
+> associated risks, and our company disclaims any liability for damages or losses.
 
 ## Repository Structure
 
