@@ -8,7 +8,7 @@ use crate::rescue::{
     RescueCrhfGate, RescueCrhfGateConfig, RescueCrhfInstructions, RescueParametersBls,
 };
 use crate::util::{big_to_fe, fe_to_big, RegionCtx};
-use crate::AssignedValue;
+use crate::{AssignedCondition, AssignedValue};
 use ff::{Field, PrimeField};
 use group::prime::PrimeCurveAffine;
 use group::{Curve, Group};
@@ -91,13 +91,29 @@ impl SchnorrVerifierGate {
     /// See [$verify$][crate::docs::schnorr#verify] of Schnorr signature
     /// and its [implementation][crate::signatures::primitive::schnorr::Schnorr::verify()].
     #[doc = include_str!("../../docs/signatures/schnorr/gate-verify.md")]
-    pub fn verify(
+    pub fn assert_verify(
         &self,
         ctx: &mut RegionCtx<'_, Base>,
         signature: &AssignedSchnorrSignature,
         pk: &AssignedEccPoint,
         msg: &AssignedValue<Base>,
     ) -> Result<(), Error> {
+        let is_verified = self.verify(ctx, signature, pk, msg)?;
+        self.ecc_gate
+            .main_gate
+            .assert_one(ctx, &is_verified)?;
+        Ok(())
+    }
+
+    /// Schnorr verifier instruction.
+    /// Returns an [AssignedCondition] which is 1 if the signature is valid and 0 otherwise.
+    pub fn verify(
+        &self,
+        ctx: &mut RegionCtx<'_, Base>,
+        signature: &AssignedSchnorrSignature,
+        pk: &AssignedEccPoint,
+        msg: &AssignedValue<Base>,
+    ) -> Result<AssignedCondition<Base>, Error> {
         let two_pk = self.ecc_gate.add(ctx, pk, pk)?;
         let four_pk = self.ecc_gate.add(ctx, &two_pk, &two_pk)?;
         let eight_pk = self.ecc_gate.add(ctx, &four_pk, &four_pk)?;
@@ -121,9 +137,10 @@ impl SchnorrVerifierGate {
         let challenge = self.rescue_hash_gate.hash(ctx, &input_hash)?; //  larger than mod with high prob
 
         let lhs = self.combined_mul(ctx, &signature.1.0, &challenge, &assigned_generator, pk)?;
-        self.ecc_gate.constrain_equal(ctx, &lhs, &signature.0)?;
 
-        Ok(())
+        //self.ecc_gate.constrain_equal(ctx, &lhs, &signature.0)?;
+
+        Ok(self.ecc_gate.is_equal(ctx, &lhs, &signature.0)?)
     }
 
     // We need to negate the second scalar prior to the addition
@@ -332,6 +349,14 @@ impl SchnorrVerifierGate {
 
         Ok((assigned_sig_point, assigned_sig_scalar))
     }
+
+    pub fn assign_dummy_sig(
+        &self,
+        ctx: &mut RegionCtx<'_, Base>,
+    ) -> Result<AssignedSchnorrSignature, Error> {
+        let dummy_schnorr_sig = (JubjubAffine::identity(), JubjubScalar::one());
+        self.assign_sig(ctx, &Value::known(dummy_schnorr_sig))
+    }
 }
 
 impl Chip<Base> for SchnorrVerifierGate {
@@ -416,7 +441,7 @@ mod tests {
                         .ecc_gate
                         .witness_point(&mut ctx, &Value::known(self.pk))?;
 
-                    schnorr_gate.verify(&mut ctx, &assigned_sig, &assigned_pk, &assigned_msg)?;
+                    schnorr_gate.assert_verify(&mut ctx, &assigned_sig, &assigned_pk, &assigned_msg)?;
 
                     // We could test with hashing the PIs, but that limits us more wrt to testing (different pk, different msg)
                     // rescue_hash_gate.hash(&mut ctx, &[assigned_pk.x, assigned_pk.y, assigned_msg])

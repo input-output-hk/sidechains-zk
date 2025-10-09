@@ -197,6 +197,14 @@ pub trait EccInstructions<C: AffinePoint>: Chip<C::Base> + Clone + Debug {
         b: &Self::Point,
     ) -> Result<(), Error>;
 
+    /// Returns `1` if point `a` is equal in value to point `b`, otherwise `0`.
+    fn is_equal(
+        &self,
+        ctx: &mut RegionCtx<'_, JubjubBase>,
+        a: &Self::Point,
+        b: &Self::Point,
+    ) -> Result<AssignedCondition<JubjubBase>, Error>;
+
     /// Witnesses the given point as a private input to the circuit.
     /// This allows the point to be the identity, mapped to (0, 0) in
     /// affine coordinates.
@@ -306,6 +314,19 @@ impl EccInstructions<JubjubAffine> for EccChip {
         ctx.constrain_equal(a.y().cell(), b.y().cell())?;
 
         Ok(())
+    }
+
+    fn is_equal(
+        &self,
+        ctx: &mut RegionCtx<'_, JubjubBase>,
+        a: &Self::Point,
+        b: &Self::Point,
+    ) -> Result<AssignedCondition<JubjubBase>, Error> {
+        let x_is_equal = self.main_gate.is_equal(ctx, &a.x, &b.x)?;
+        let y_is_equal = self.main_gate.is_equal(ctx, &a.y, &b.y)?;
+        let both_equal = self.main_gate.and(ctx, &x_is_equal, &y_is_equal)?;
+
+        Ok(both_equal)
     }
 
     fn witness_point(
