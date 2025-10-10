@@ -16,7 +16,7 @@ use crate::signatures::schnorr::{
 };
 use crate::util::RegionCtx;
 use crate::AssignedValue;
-use blstrs::{Base, JubjubAffine, Fr as JubjubScalar};
+use blstrs::{Base, Fr as JubjubScalar, JubjubAffine};
 use ff::Field;
 use halo2_proofs::circuit::{Chip, Value};
 use halo2_proofs::plonk::{ConstraintSystem, Error};
@@ -104,24 +104,26 @@ impl AtmsVerifierGate {
         //       to be executed on-chain.
         for (sig, pk) in signatures.iter().zip(pks.iter()) {
             let is_verified = self.schnorr_gate.verify(ctx, &sig, pk, msg)?;
-            counter =
-                self.schnorr_gate
-                    .ecc_gate
-                    .main_gate
-                    .add(ctx, &counter, &is_verified)?;
+            counter = self
+                .schnorr_gate
+                .ecc_gate
+                .main_gate
+                .add(ctx, &counter, &is_verified)?;
 
             // TODO: instead of checking at each step if the threshold is reached,
             //       we can do a single check at the end that counter >= threshold.
             //       This would require implementing `assert_greater`
-            let is_threshold_reached = self.schnorr_gate
+            let is_threshold_reached = self
+                .schnorr_gate
                 .ecc_gate
                 .main_gate
                 .is_equal(ctx, &counter, threshold)?;
 
-            is_enough_sigs = self.schnorr_gate
-                .ecc_gate
-                .main_gate
-                .or(ctx, &is_threshold_reached, &is_enough_sigs)?;
+            is_enough_sigs = self.schnorr_gate.ecc_gate.main_gate.or(
+                ctx,
+                &is_threshold_reached,
+                &is_enough_sigs,
+            )?;
         }
 
         self.schnorr_gate
@@ -179,9 +181,7 @@ mod tests {
         rng: &mut R,
         num_parties: usize,
     ) -> (Vec<(blstrs::Fr, JubjubAffine)>, Vec<JubjubAffine>) {
-        let keypairs: Vec<_> = (0..num_parties)
-            .map(|_| Schnorr::keygen(rng))
-            .collect();
+        let keypairs: Vec<_> = (0..num_parties).map(|_| Schnorr::keygen(rng)).collect();
         let pks = keypairs.iter().map(|(_, pk)| *pk).collect();
         (keypairs, pks)
     }
@@ -218,7 +218,7 @@ mod tests {
         vk: &VerifyingKey<Base, KZGCommitmentScheme<Bls12>>,
         circuit: TestCircuitAtmsSignature,
         public_inputs: &[&[&[Base]]],
-    ) {
+    ) -> Result<(), String> {
         let mut transcript = CircuitTranscript::<Blake2bState>::init();
 
         create_proof::<Base, KZGCommitmentScheme<_>, _, _>(
@@ -229,7 +229,7 @@ mod tests {
             rng,
             &mut transcript,
         )
-        .expect("proof generation should not fail");
+        .map_err(|e| format!("proof generation failed: {:?}", e))?;
 
         let proof = transcript.finalize();
 
@@ -240,11 +240,11 @@ mod tests {
             public_inputs,
             &mut transcript_verifier,
         )
-        .expect("prepare verification failed");
+        .map_err(|e| format!("prepare verification failed: {:?}", e))?;
 
         verifier
             .verify(&params.verifier_params())
-            .expect("verify failed");
+            .map_err(|e| format!("verification failed: {:?}", e))
     }
 
     #[derive(Clone)]
@@ -295,9 +295,7 @@ mod tests {
                                     .schnorr_gate
                                     .assign_sig(&mut ctx, &Value::known(sig))
                             } else {
-                                atms_gate
-                                    .schnorr_gate
-                                    .assign_dummy_sig(&mut ctx)
+                                atms_gate.schnorr_gate.assign_dummy_sig(&mut ctx)
                             }
                         })
                         .collect::<Result<Vec<_>, Error>>()?;
@@ -423,11 +421,13 @@ mod tests {
         let pk = keygen_pk(vk.clone(), &circuit).unwrap();
 
         // Prove with first set of signatures
-        create_and_verify_proof(&mut rng, &kzg_params, &pk, &vk, circuit.clone(), pi);
+        create_and_verify_proof(&mut rng, &kzg_params, &pk, &vk, circuit.clone(), pi)
+            .expect("first proof should succeed");
 
         // Prove with second set of signatures (same circuit structure)
         circuit.signatures = signatures_2;
-        create_and_verify_proof(&mut rng, &kzg_params, &pk, &vk, circuit, pi);
+        create_and_verify_proof(&mut rng, &kzg_params, &pk, &vk, circuit, pi)
+            .expect("second proof should succeed");
     }
 
     #[test]
@@ -446,7 +446,7 @@ mod tests {
         let pks_comm2 = compute_pks_commitment(&pks2);
 
         // Generate signatures with different thresholds
-        let signing_parties_1 = (0..NUM_PARTIES).choose_multiple(&mut rng, THRESHOLD );
+        let signing_parties_1 = (0..NUM_PARTIES).choose_multiple(&mut rng, THRESHOLD);
         let signatures_1 = generate_signatures(&mut rng, &keypairs1, &signing_parties_1, msg);
 
         let signing_parties_2 = (0..NUM_PARTIES).choose_multiple(&mut rng, THRESHOLD);
@@ -471,14 +471,16 @@ mod tests {
         let pk = keygen_pk(vk.clone(), &circuit).unwrap();
 
         // Prove with first set of parties
-        create_and_verify_proof(&mut rng, &kzg_params, &pk, &vk, circuit.clone(), pi1);
+        create_and_verify_proof(&mut rng, &kzg_params, &pk, &vk, circuit.clone(), pi1)
+            .expect("first proof should succeed");
 
         // Prove with second set of parties and different threshold (same circuit structure)
         circuit.signatures = signatures_2;
         circuit.pks_comm = pks_comm2;
         circuit.pks = pks2;
 
-        create_and_verify_proof(&mut rng, &kzg_params, &pk, &vk, circuit, pi2);
+        create_and_verify_proof(&mut rng, &kzg_params, &pk, &vk, circuit, pi2)
+            .expect("second proof should succeed");
     }
 
     #[test]
@@ -494,7 +496,7 @@ mod tests {
         let pks_comm1 = compute_pks_commitment(&pks1);
 
         // Generate more signatures than needed for the first threshold
-        let signing_parties_1 = (0..NUM_PARTIES).choose_multiple(&mut rng, THRESHOLD+1 );
+        let signing_parties_1 = (0..NUM_PARTIES).choose_multiple(&mut rng, THRESHOLD + 1);
         let signatures_1 = generate_signatures(&mut rng, &keypairs1, &signing_parties_1, msg);
 
         let signing_parties_2 = (0..NUM_PARTIES).choose_multiple(&mut rng, THRESHOLD2);
@@ -518,13 +520,66 @@ mod tests {
         let vk = keygen_vk(&kzg_params, &circuit).unwrap();
         let pk = keygen_pk(vk.clone(), &circuit).unwrap();
 
-        // Prove with first threashold
-        create_and_verify_proof(&mut rng, &kzg_params, &pk, &vk, circuit.clone(), pi1);
+        // Prove with first threshold
+        create_and_verify_proof(&mut rng, &kzg_params, &pk, &vk, circuit.clone(), pi1)
+            .expect("first proof should succeed");
 
-        // Prove with second threashold
+        // Prove with second threshold
         circuit.signatures = signatures_2;
         circuit.threshold = Base::from(THRESHOLD2 as u64);
 
-        create_and_verify_proof(&mut rng, &kzg_params, &pk, &vk, circuit, pi2);
+        create_and_verify_proof(&mut rng, &kzg_params, &pk, &vk, circuit, pi2)
+            .expect("second proof should succeed");
+    }
+
+    #[test]
+    fn duplicate_signature_should_fail() {
+        const NUM_PARTIES: usize = 6;
+        const THRESHOLD: usize = 3;
+
+        let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
+        let msg = Base::random(&mut rng);
+
+        let (keypairs, pks) = generate_keypairs(&mut rng, NUM_PARTIES);
+        let pks_comm = compute_pks_commitment(&pks);
+
+        // Generate valid signatures from exactly THRESHOLD parties
+        let signing_parties = (0..NUM_PARTIES).choose_multiple(&mut rng, THRESHOLD);
+        let mut signatures = generate_signatures(&mut rng, &keypairs, &signing_parties, msg);
+
+        // Find the first valid signature
+        let first_valid_index = signatures.iter().position(|s| s.is_some()).unwrap();
+        let first_valid_sig = signatures[first_valid_index].clone();
+
+        // Find the second valid signature and replace it with a duplicate of the first
+        let second_valid_index = signatures
+            .iter()
+            .skip(first_valid_index + 1)
+            .position(|s| s.is_some())
+            .map(|i| i + first_valid_index + 1)
+            .unwrap();
+
+        // Replace the second valid signature with the duplicate
+        signatures[second_valid_index] = first_valid_sig;
+
+        // Now we have THRESHOLD signatures total, but one is duplicated
+        // so only THRESHOLD-1 unique valid signatures
+
+        let circuit = TestCircuitAtmsSignature {
+            signatures,
+            pks,
+            pks_comm,
+            msg,
+            threshold: Base::from(THRESHOLD as u64),
+        };
+
+        let pi = vec![vec![pks_comm, msg, Base::from(THRESHOLD as u64)]];
+        let prover = MockProver::run(k_from_circuit(&circuit), &circuit, pi)
+            .expect("Failed to run ATMS verifier mock prover");
+
+        assert!(
+            prover.verify().is_err(),
+            "Proof should fail with duplicate signature, but succeeded"
+        );
     }
 }
