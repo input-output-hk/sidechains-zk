@@ -161,7 +161,7 @@ mod tests {
     use halo2_proofs::poly::kzg::KZGCommitmentScheme;
     use halo2_proofs::utils::SerdeFormat;
     use halo2_proofs::{
-        plonk::{create_proof, keygen_pk, keygen_vk, prepare, Circuit},
+        plonk::{create_proof, keygen_pk, keygen_vk, prepare, Circuit, ProvingKey, VerifyingKey},
         poly::{commitment::Guard, kzg::params::ParamsKZG},
         transcript::{CircuitTranscript, Transcript},
     };
@@ -173,6 +173,79 @@ mod tests {
     use std::ops::Mul;
     use std::path::Path;
     use std::time::Instant;
+
+    /// Generate keypairs and corresponding public keys
+    fn generate_keypairs<R: rand_core::RngCore + rand_core::CryptoRng>(
+        rng: &mut R,
+        num_parties: usize,
+    ) -> (Vec<(blstrs::Fr, JubjubAffine)>, Vec<JubjubAffine>) {
+        let keypairs: Vec<_> = (0..num_parties)
+            .map(|_| Schnorr::keygen(rng))
+            .collect();
+        let pks = keypairs.iter().map(|(_, pk)| *pk).collect();
+        (keypairs, pks)
+    }
+
+    /// Compute commitment to public keys
+    fn compute_pks_commitment(pks: &[JubjubAffine]) -> Base {
+        let flattened_pks: Vec<Base> = pks.iter().map(|pk| pk.get_u()).collect();
+        RescueSponge::<Base, RescueParametersBls>::hash(&flattened_pks, None)
+    }
+
+    /// Generate signatures for selected parties
+    fn generate_signatures<R: rand_core::RngCore + rand_core::CryptoRng>(
+        rng: &mut R,
+        keypairs: &[(blstrs::Fr, JubjubAffine)],
+        signing_parties: &[usize],
+        msg: Base,
+    ) -> Vec<Option<SchnorrSig>> {
+        (0..keypairs.len())
+            .map(|index| {
+                if signing_parties.contains(&index) {
+                    Some(Schnorr::sign(keypairs[index], msg, rng))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    /// Create a proof for the given circuit and public inputs
+    fn create_and_verify_proof<R: rand_core::RngCore + rand_core::CryptoRng>(
+        rng: &mut R,
+        params: &ParamsKZG<Bls12>,
+        pk: &ProvingKey<Base, KZGCommitmentScheme<Bls12>>,
+        vk: &VerifyingKey<Base, KZGCommitmentScheme<Bls12>>,
+        circuit: TestCircuitAtmsSignature,
+        public_inputs: &[&[&[Base]]],
+    ) {
+        let mut transcript = CircuitTranscript::<Blake2bState>::init();
+
+        create_proof::<Base, KZGCommitmentScheme<_>, _, _>(
+            params,
+            pk,
+            &[circuit],
+            public_inputs,
+            rng,
+            &mut transcript,
+        )
+        .expect("proof generation should not fail");
+
+        let proof = transcript.finalize();
+
+        let mut transcript_verifier = CircuitTranscript::<Blake2bState>::init_from_bytes(&proof);
+
+        let verifier = prepare::<_, KZGCommitmentScheme<Bls12>, CircuitTranscript<Blake2bState>>(
+            vk,
+            public_inputs,
+            &mut transcript_verifier,
+        )
+        .expect("prepare verification failed");
+
+        verifier
+            .verify(&params.verifier_params())
+            .expect("verify failed");
+    }
 
     #[derive(Clone)]
     struct TestCircuitConfig {
@@ -289,32 +362,13 @@ mod tests {
         const THRESHOLD: usize = 72;
 
         let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
-        let generator = JubjubExtended::from(JubjubSubgroup::generator());
         let msg = Base::random(&mut rng);
 
-        let keypairs = (0..NUM_PARTIES)
-            .map(|_| Schnorr::keygen(&mut rng))
-            .collect::<Vec<_>>();
-
-        let pks = keypairs.iter().map(|(_, pk)| *pk).collect::<Vec<_>>();
-
-        let mut flattened_pks = Vec::with_capacity(keypairs.len() * 2);
-        for (_, pk) in &keypairs {
-            flattened_pks.push(pk.get_u());
-        }
-
-        let pks_comm = RescueSponge::<Base, RescueParametersBls>::hash(&flattened_pks, None);
+        let (keypairs, pks) = generate_keypairs(&mut rng, NUM_PARTIES);
+        let pks_comm = compute_pks_commitment(&pks);
 
         let signing_parties = (0..NUM_PARTIES).choose_multiple(&mut rng, THRESHOLD);
-        let signatures = (0..NUM_PARTIES)
-            .map(|index| {
-                if signing_parties.contains(&index) {
-                    Some(Schnorr::sign(keypairs[index], msg, &mut rng))
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
+        let signatures = generate_signatures(&mut rng, &keypairs, &signing_parties, msg);
 
         let circuit = TestCircuitAtmsSignature {
             signatures,
@@ -338,48 +392,22 @@ mod tests {
         const THRESHOLD: usize = 3;
 
         let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
-        let generator = JubjubExtended::from(JubjubSubgroup::generator());
         let msg = Base::random(&mut rng);
 
-        let keypairs = (0..NUM_PARTIES)
-            .map(|_| Schnorr::keygen(&mut rng))
-            .collect::<Vec<_>>();
+        let (keypairs, pks) = generate_keypairs(&mut rng, NUM_PARTIES);
+        let pks_comm = compute_pks_commitment(&pks);
 
-        let pks = keypairs.iter().map(|(_, pk)| *pk).collect::<Vec<_>>();
-
-        let mut flattened_pks = Vec::with_capacity(keypairs.len() * 2);
-        for (_, pk) in &keypairs {
-            flattened_pks.push(pk.get_u());
-        }
-
-        let pks_comm = RescueSponge::<Base, RescueParametersBls>::hash(&flattened_pks, None);
-
+        // Generate two different sets of signatures from the same keypairs
         let signing_parties_1 = (0..NUM_PARTIES).choose_multiple(&mut rng, THRESHOLD);
-        let signatures_1 = (0..NUM_PARTIES)
-            .map(|index| {
-                if signing_parties_1.contains(&index) {
-                    Some(Schnorr::sign(keypairs[index], msg, &mut rng))
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
+        let signatures_1 = generate_signatures(&mut rng, &keypairs, &signing_parties_1, msg);
 
         let signing_parties_2 = (0..NUM_PARTIES).choose_multiple(&mut rng, THRESHOLD);
-
-        let signatures_2 = (0..NUM_PARTIES)
-            .map(|index| {
-                if signing_parties_2.contains(&index) {
-                    Some(Schnorr::sign(keypairs[index], msg, &mut rng))
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
+        let signatures_2 = generate_signatures(&mut rng, &keypairs, &signing_parties_2, msg);
+        assert_ne!(signing_parties_1, signing_parties_2);
 
         let mut circuit = TestCircuitAtmsSignature {
             signatures: signatures_1,
-            pks,
+            pks: pks.clone(),
             pks_comm,
             msg,
             threshold: Base::from(THRESHOLD as u64),
@@ -394,131 +422,46 @@ mod tests {
         let vk = keygen_vk(&kzg_params, &circuit).unwrap();
         let pk = keygen_pk(vk.clone(), &circuit).unwrap();
 
-        let mut transcript: CircuitTranscript<Blake2bState> =
-            CircuitTranscript::<Blake2bState>::init();
-        create_proof::<Base, KZGCommitmentScheme<_>, _, _>(
-            &kzg_params,
-            &pk,
-            &[circuit.clone()],
-            &[&[&[pks_comm, msg, Base::from(THRESHOLD as u64)]]],
-            &mut rng,
-            &mut transcript,
-        )
-        .expect("proof generation should not fail");
+        // Prove with first set of signatures
+        create_and_verify_proof(&mut rng, &kzg_params, &pk, &vk, circuit.clone(), pi);
 
-        let proof = transcript.finalize();
-
-        let mut transcript_verifier: CircuitTranscript<Blake2bState> =
-            CircuitTranscript::<Blake2bState>::init_from_bytes(&proof);
-
-        let verifier = prepare::<_, KZGCommitmentScheme<Bls12>, CircuitTranscript<Blake2bState>>(
-            &vk,
-            &pi,
-            &mut transcript_verifier,
-        )
-        .expect("prepare verification failed");
-
-        verifier
-            .verify(&kzg_params.verifier_params())
-            .expect("verify failed");
-
-        // ======================================================
-        // Now we change the signatures but keep the same circuit
+        // Prove with second set of signatures (same circuit structure)
         circuit.signatures = signatures_2;
-        let mut transcript: CircuitTranscript<Blake2bState> =
-            CircuitTranscript::<Blake2bState>::init();
-        create_proof::<Base, KZGCommitmentScheme<_>, _, _>(
-            &kzg_params,
-            &pk,
-            &[circuit],
-            &[&[&[pks_comm, msg, Base::from(THRESHOLD as u64)]]],
-            &mut rng,
-            &mut transcript,
-        )
-        .expect("proof generation should not fail");
-
-        let proof = transcript.finalize();
-
-        let mut transcript_verifier: CircuitTranscript<Blake2bState> =
-            CircuitTranscript::<Blake2bState>::init_from_bytes(&proof);
-
-        let verifier = prepare::<_, KZGCommitmentScheme<Bls12>, CircuitTranscript<Blake2bState>>(
-            &vk,
-            &pi,
-            &mut transcript_verifier,
-        )
-        .expect("prepare verification failed");
-
-        verifier
-            .verify(&kzg_params.verifier_params())
-            .expect("verify failed");
+        create_and_verify_proof(&mut rng, &kzg_params, &pk, &vk, circuit, pi);
     }
 
     #[test]
     fn same_circuit_for_different_parties() {
         const NUM_PARTIES: usize = 6;
         const THRESHOLD: usize = 3;
-        const THRESHOLD2: usize = 2;
 
         let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
-        let generator = JubjubExtended::from(JubjubSubgroup::generator());
         let msg = Base::random(&mut rng);
 
-        let keypairs = (0..NUM_PARTIES)
-            .map(|_| Schnorr::keygen(&mut rng))
-            .collect::<Vec<_>>();
-        let keypairs2 = (0..NUM_PARTIES)
-            .map(|_| Schnorr::keygen(&mut rng))
-            .collect::<Vec<_>>();
+        // Generate two different sets of keypairs
+        let (keypairs1, pks1) = generate_keypairs(&mut rng, NUM_PARTIES);
+        let (keypairs2, pks2) = generate_keypairs(&mut rng, NUM_PARTIES);
 
-        let pks = keypairs.iter().map(|(_, pk)| *pk).collect::<Vec<_>>();
-        let pks2 = keypairs2.iter().map(|(_, pk)| *pk).collect::<Vec<_>>();
+        let pks_comm1 = compute_pks_commitment(&pks1);
+        let pks_comm2 = compute_pks_commitment(&pks2);
 
-        let mut flattened_pks = Vec::with_capacity(keypairs.len() * 2);
-        for (_, pk) in &keypairs {
-            flattened_pks.push(pk.get_u());
-        }
-        let mut flattened_pks2 = Vec::with_capacity(keypairs2.len() * 2);
-        for (_, pk) in &keypairs2 {
-            flattened_pks2.push(pk.get_u());
-        }
+        // Generate signatures with different thresholds
+        let signing_parties_1 = (0..NUM_PARTIES).choose_multiple(&mut rng, THRESHOLD );
+        let signatures_1 = generate_signatures(&mut rng, &keypairs1, &signing_parties_1, msg);
 
-        let pks_comm = RescueSponge::<Base, RescueParametersBls>::hash(&flattened_pks, None);
-        let pks_comm2 = RescueSponge::<Base, RescueParametersBls>::hash(&flattened_pks2, None);
-
-        let signing_parties_1 = (0..NUM_PARTIES).choose_multiple(&mut rng, THRESHOLD+1); // generate 1 signature more than threshold to make sure we can verify
-        let signatures_1 = (0..NUM_PARTIES)
-            .map(|index| {
-                if signing_parties_1.contains(&index) {
-                    Some(Schnorr::sign(keypairs[index], msg, &mut rng))
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-
-        let signing_parties_2 = (0..NUM_PARTIES).choose_multiple(&mut rng, THRESHOLD2);
-
-        let signatures_2 = (0..NUM_PARTIES)
-            .map(|index| {
-                if signing_parties_2.contains(&index) {
-                    Some(Schnorr::sign(keypairs2[index], msg, &mut rng))
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
+        let signing_parties_2 = (0..NUM_PARTIES).choose_multiple(&mut rng, THRESHOLD);
+        let signatures_2 = generate_signatures(&mut rng, &keypairs2, &signing_parties_2, msg);
 
         let mut circuit = TestCircuitAtmsSignature {
             signatures: signatures_1,
-            pks,
-            pks_comm,
+            pks: pks1,
+            pks_comm: pks_comm1,
             msg,
             threshold: Base::from(THRESHOLD as u64),
         };
 
-        let pi: &[&[&[Base]]] = &[&[&[pks_comm, msg, Base::from(THRESHOLD as u64)]]];
-        let pi2: &[&[&[Base]]] = &[&[&[pks_comm2, msg, Base::from(THRESHOLD2 as u64)]]];
+        let pi1: &[&[&[Base]]] = &[&[&[pks_comm1, msg, Base::from(THRESHOLD as u64)]]];
+        let pi2: &[&[&[Base]]] = &[&[&[pks_comm2, msg, Base::from(THRESHOLD as u64)]]];
 
         // Setup real circuit
         let k: u32 = k_from_circuit(&circuit);
@@ -527,67 +470,61 @@ mod tests {
         let vk = keygen_vk(&kzg_params, &circuit).unwrap();
         let pk = keygen_pk(vk.clone(), &circuit).unwrap();
 
-        let mut transcript: CircuitTranscript<Blake2bState> =
-            CircuitTranscript::<Blake2bState>::init();
-        create_proof::<Base, KZGCommitmentScheme<_>, _, _>(
-            &kzg_params,
-            &pk,
-            &[circuit.clone()],
-            pi,
-            &mut rng,
-            &mut transcript,
-        )
-            .expect("proof generation should not fail");
+        // Prove with first set of parties
+        create_and_verify_proof(&mut rng, &kzg_params, &pk, &vk, circuit.clone(), pi1);
 
-        let proof = transcript.finalize();
-
-        let mut transcript_verifier: CircuitTranscript<Blake2bState> =
-            CircuitTranscript::<Blake2bState>::init_from_bytes(&proof);
-
-        let verifier = prepare::<_, KZGCommitmentScheme<Bls12>, CircuitTranscript<Blake2bState>>(
-            &vk,
-            &pi,
-            &mut transcript_verifier,
-        )
-            .expect("prepare verification failed");
-
-        verifier
-            .verify(&kzg_params.verifier_params())
-            .expect("verify failed");
-
-        // ======================================================
-        // Now we change the signatures but keep the same circuit
+        // Prove with second set of parties and different threshold (same circuit structure)
         circuit.signatures = signatures_2;
         circuit.pks_comm = pks_comm2;
         circuit.pks = pks2;
+
+        create_and_verify_proof(&mut rng, &kzg_params, &pk, &vk, circuit, pi2);
+    }
+
+    #[test]
+    fn variable_threshold() {
+        const NUM_PARTIES: usize = 6;
+        const THRESHOLD: usize = 3;
+        const THRESHOLD2: usize = 2;
+
+        let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
+        let msg = Base::random(&mut rng);
+
+        let (keypairs1, pks1) = generate_keypairs(&mut rng, NUM_PARTIES);
+        let pks_comm1 = compute_pks_commitment(&pks1);
+
+        // Generate more signatures than needed for the first threshold
+        let signing_parties_1 = (0..NUM_PARTIES).choose_multiple(&mut rng, THRESHOLD+1 );
+        let signatures_1 = generate_signatures(&mut rng, &keypairs1, &signing_parties_1, msg);
+
+        let signing_parties_2 = (0..NUM_PARTIES).choose_multiple(&mut rng, THRESHOLD2);
+        let signatures_2 = generate_signatures(&mut rng, &keypairs1, &signing_parties_2, msg);
+
+        let mut circuit = TestCircuitAtmsSignature {
+            signatures: signatures_1,
+            pks: pks1,
+            pks_comm: pks_comm1,
+            msg,
+            threshold: Base::from(THRESHOLD as u64),
+        };
+
+        let pi1: &[&[&[Base]]] = &[&[&[pks_comm1, msg, Base::from(THRESHOLD as u64)]]];
+        let pi2: &[&[&[Base]]] = &[&[&[pks_comm1, msg, Base::from(THRESHOLD2 as u64)]]];
+
+        // Setup real circuit
+        let k: u32 = k_from_circuit(&circuit);
+        let kzg_params = ParamsKZG::<Bls12>::unsafe_setup(k, &mut rng);
+
+        let vk = keygen_vk(&kzg_params, &circuit).unwrap();
+        let pk = keygen_pk(vk.clone(), &circuit).unwrap();
+
+        // Prove with first threashold
+        create_and_verify_proof(&mut rng, &kzg_params, &pk, &vk, circuit.clone(), pi1);
+
+        // Prove with second threashold
+        circuit.signatures = signatures_2;
         circuit.threshold = Base::from(THRESHOLD2 as u64);
 
-        let mut transcript: CircuitTranscript<Blake2bState> =
-            CircuitTranscript::<Blake2bState>::init();
-        create_proof::<Base, KZGCommitmentScheme<_>, _, _>(
-            &kzg_params,
-            &pk,
-            &[circuit],
-            pi2,
-            &mut rng,
-            &mut transcript,
-        )
-            .expect("proof generation should not fail");
-
-        let proof = transcript.finalize();
-
-        let mut transcript_verifier: CircuitTranscript<Blake2bState> =
-            CircuitTranscript::<Blake2bState>::init_from_bytes(&proof);
-
-        let verifier = prepare::<_, KZGCommitmentScheme<Bls12>, CircuitTranscript<Blake2bState>>(
-            &vk,
-            &pi2,
-            &mut transcript_verifier,
-        )
-            .expect("prepare verification failed");
-
-        verifier
-            .verify(&kzg_params.verifier_params())
-            .expect("verify 2 failed");
+        create_and_verify_proof(&mut rng, &kzg_params, &pk, &vk, circuit, pi2);
     }
 }
