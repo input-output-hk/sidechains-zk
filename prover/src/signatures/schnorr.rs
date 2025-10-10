@@ -138,8 +138,6 @@ impl SchnorrVerifierGate {
 
         let lhs = self.combined_mul(ctx, &signature.1.0, &challenge, &assigned_generator, pk)?;
 
-        //self.ecc_gate.constrain_equal(ctx, &lhs, &signature.0)?;
-
         Ok(self.ecc_gate.is_equal(ctx, &lhs, &signature.0)?)
     }
 

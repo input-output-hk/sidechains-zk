@@ -72,17 +72,16 @@ impl Circuit<Base> for BenchCircuitAtmsSignature {
                     .iter()
                     .map(|&signature| {
                         if let Some(sig) = signature {
-                            Some(
-                                atms_gate
-                                    .schnorr_gate
-                                    .assign_sig(&mut ctx, &Value::known(sig))
-                                    .ok()?,
-                            )
+                            atms_gate
+                                .schnorr_gate
+                                .assign_sig(&mut ctx, &Value::known(sig))
                         } else {
-                            None
+                            atms_gate
+                                .schnorr_gate
+                                .assign_dummy_sig(&mut ctx)
                         }
                     })
-                    .collect::<Vec<_>>();
+                    .collect::<Result<Vec<_>, Error>>()?;
                 let assigned_pks = self
                     .pks
                     .iter()
