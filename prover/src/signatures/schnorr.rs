@@ -87,33 +87,13 @@ impl SchnorrVerifierGate {
         }
     }
 
-    /// Schnorr verifier instruction.
-    /// See [$verify$][crate::docs::schnorr#verify] of Schnorr signature
-    /// and its [implementation][crate::signatures::primitive::schnorr::Schnorr::verify()].
-    #[doc = include_str!("../../docs/signatures/schnorr/gate-verify.md")]
-    pub fn assert_verify(
+    fn verify_prepare(
         &self,
         ctx: &mut RegionCtx<'_, Base>,
         signature: &AssignedSchnorrSignature,
         pk: &AssignedEccPoint,
         msg: &AssignedValue<Base>,
-    ) -> Result<(), Error> {
-        let is_verified = self.verify(ctx, signature, pk, msg)?;
-        self.ecc_gate
-            .main_gate
-            .assert_one(ctx, &is_verified)?;
-        Ok(())
-    }
-
-    /// Schnorr verifier instruction.
-    /// Returns an [AssignedCondition] which is 1 if the signature is valid and 0 otherwise.
-    pub fn verify(
-        &self,
-        ctx: &mut RegionCtx<'_, Base>,
-        signature: &AssignedSchnorrSignature,
-        pk: &AssignedEccPoint,
-        msg: &AssignedValue<Base>,
-    ) -> Result<AssignedCondition<Base>, Error> {
+    ) -> Result<(AssignedEccPoint, AssignedEccPoint), Error> {
         let two_pk = self.ecc_gate.add(ctx, pk, pk)?;
         let four_pk = self.ecc_gate.add(ctx, &two_pk, &two_pk)?;
         let eight_pk = self.ecc_gate.add(ctx, &four_pk, &four_pk)?;
@@ -138,7 +118,38 @@ impl SchnorrVerifierGate {
 
         let lhs = self.combined_mul(ctx, &signature.1.0, &challenge, &assigned_generator, pk)?;
 
-        Ok(self.ecc_gate.is_equal(ctx, &lhs, &signature.0)?)
+        Ok((lhs, signature.0.clone()))
+    }
+
+    /// Schnorr verifier instruction.
+    /// See [$verify$][crate::docs::schnorr#verify] of Schnorr signature
+    /// and its [implementation][crate::signatures::primitive::schnorr::Schnorr::verify()].
+    #[doc = include_str!("../../docs/signatures/schnorr/gate-verify.md")]
+    pub fn assert_verify(
+        &self,
+        ctx: &mut RegionCtx<'_, Base>,
+        signature: &AssignedSchnorrSignature,
+        pk: &AssignedEccPoint,
+        msg: &AssignedValue<Base>,
+    ) -> Result<(), Error> {
+        let (lhs, signature0) = self.verify_prepare(ctx, signature, pk, msg)?;
+        self.ecc_gate
+            .constrain_equal(ctx, &lhs, &signature0)?;
+        Ok(())
+    }
+
+    /// Schnorr verifier instruction.
+    /// Returns an [AssignedCondition] which is 1 if the signature is valid and 0 otherwise.
+    pub fn verify(
+        &self,
+        ctx: &mut RegionCtx<'_, Base>,
+        signature: &AssignedSchnorrSignature,
+        pk: &AssignedEccPoint,
+        msg: &AssignedValue<Base>,
+    ) -> Result<AssignedCondition<Base>, Error> {
+        let (lhs, signature0) = self.verify_prepare(ctx, signature, pk, msg)?;
+
+        Ok(self.ecc_gate.is_equal(ctx, &lhs, &signature0)?)
     }
 
     // We need to negate the second scalar prior to the addition
