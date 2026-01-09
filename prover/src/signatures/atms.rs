@@ -11,15 +11,13 @@ use crate::instructions::MainGateInstructions;
 use crate::rescue::{
     RescueCrhfGate, RescueCrhfGateConfig, RescueCrhfInstructions, RescueParametersBls,
 };
-use crate::signatures::schnorr::{
-    AssignedSchnorrSignature, SchnorrVerifierConfig, SchnorrVerifierGate,
-};
+use crate::signatures::schnorr::{AssignedSchnorrSignature, SchnorrSig, SchnorrVerifierConfig, SchnorrVerifierGate};
 use crate::util::RegionCtx;
 use crate::AssignedValue;
 use blstrs::{Base, Fr as JubjubScalar, JubjubAffine};
 use ff::Field;
-use halo2_proofs::circuit::{Chip, Value};
-use halo2_proofs::plonk::{ConstraintSystem, Error};
+use halo2_proofs::circuit::{Chip, Layouter, SimpleFloorPlanner, Value};
+use halo2_proofs::plonk::{Circuit, ConstraintSystem, Error};
 
 /// Configuration for `AtmsVerifierGate`.
 ///
@@ -148,6 +146,100 @@ impl Chip<Base> for AtmsVerifierGate {
     }
 }
 
+#[derive(Default, Clone, Debug)]
+pub struct AtmsSignatureCircuit {
+    pub signatures: Vec<Option<SchnorrSig>>,
+    pub pks: Vec<JubjubAffine>,
+    pub pks_comm: Base,
+    pub msg: Base,
+    pub threshold: Base,
+}
+
+impl Circuit<Base> for AtmsSignatureCircuit {
+    type Config = AtmsVerifierConfig;
+    type FloorPlanner = SimpleFloorPlanner;
+
+    fn without_witnesses(&self) -> Self {
+        Self::default()
+    }
+
+    fn configure(meta: &mut ConstraintSystem<Base>) -> Self::Config {
+        AtmsVerifierGate::configure(meta)
+    }
+
+    fn synthesize(
+        &self,
+        config: Self::Config,
+        mut layouter: impl Layouter<Base>,
+    ) -> Result<(), Error> {
+        let atms_gate = AtmsVerifierGate::new(config);
+
+        let pi_values = layouter.assign_region(
+            || "ATMS verifier test",
+            |region| {
+                let offset = 0;
+                let mut ctx = RegionCtx::new(region, offset);
+                let assigned_sigs = self
+                    .signatures
+                    .iter()
+                    .map(|&signature| {
+                        if let Some(sig) = signature {
+                            atms_gate
+                                .schnorr_gate
+                                .assign_sig(&mut ctx, &Value::known(sig))
+                        } else {
+                            atms_gate.schnorr_gate.assign_dummy_sig(&mut ctx)
+                        }
+                    })
+                    .collect::<Result<Vec<_>, Error>>()?;
+                let assigned_pks = self
+                    .pks
+                    .iter()
+                    .map(|&pk| {
+                        atms_gate
+                            .schnorr_gate
+                            .ecc_gate
+                            .witness_point(&mut ctx, &Value::known(pk))
+                    })
+                    .collect::<Result<Vec<_>, Error>>()?;
+
+                // We assign cells to be compared against the PI
+                let pi_cells = atms_gate
+                    .schnorr_gate
+                    .ecc_gate
+                    .main_gate
+                    .assign_values_slice(
+                        &mut ctx,
+                        &[
+                            Value::known(self.pks_comm),
+                            Value::known(self.msg),
+                            Value::known(self.threshold),
+                        ],
+                    )?;
+
+                atms_gate.verify(
+                    &mut ctx,
+                    &assigned_sigs,
+                    &assigned_pks,
+                    &pi_cells[0],
+                    &pi_cells[1],
+                    &pi_cells[2],
+                )?;
+
+                Ok(pi_cells)
+            },
+        )?;
+
+        let ecc_gate = atms_gate.schnorr_gate.ecc_gate;
+
+        layouter.constrain_instance(pi_values[0].cell(), ecc_gate.instance_col(), 0)?;
+        layouter.constrain_instance(pi_values[1].cell(), ecc_gate.instance_col(), 1)?;
+        layouter.constrain_instance(pi_values[2].cell(), ecc_gate.instance_col(), 2)?;
+
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -216,7 +308,7 @@ mod tests {
         params: &ParamsKZG<Bls12>,
         pk: &ProvingKey<Base, KZGCommitmentScheme<Bls12>>,
         vk: &VerifyingKey<Base, KZGCommitmentScheme<Bls12>>,
-        circuit: TestCircuitAtmsSignature,
+        circuit: AtmsSignatureCircuit,
         public_inputs: &[&[&[Base]]],
     ) -> Result<(), String> {
         let mut transcript = CircuitTranscript::<Blake2bState>::init();
@@ -247,108 +339,6 @@ mod tests {
             .map_err(|e| format!("verification failed: {:?}", e))
     }
 
-    #[derive(Clone)]
-    struct TestCircuitConfig {
-        atms_config: AtmsVerifierConfig,
-    }
-
-    #[derive(Default, Clone)]
-    struct TestCircuitAtmsSignature {
-        signatures: Vec<Option<SchnorrSig>>,
-        pks: Vec<JubjubAffine>,
-        pks_comm: Base,
-        msg: Base,
-        threshold: Base,
-    }
-
-    impl Circuit<Base> for TestCircuitAtmsSignature {
-        type Config = TestCircuitConfig;
-        type FloorPlanner = SimpleFloorPlanner;
-
-        fn without_witnesses(&self) -> Self {
-            Self::default()
-        }
-
-        fn configure(meta: &mut ConstraintSystem<Base>) -> Self::Config {
-            let atms_config = AtmsVerifierGate::configure(meta);
-            TestCircuitConfig { atms_config }
-        }
-
-        fn synthesize(
-            &self,
-            config: Self::Config,
-            mut layouter: impl Layouter<Base>,
-        ) -> Result<(), Error> {
-            let atms_gate = AtmsVerifierGate::new(config.atms_config);
-
-            let pi_values = layouter.assign_region(
-                || "ATMS verifier test",
-                |region| {
-                    let offset = 0;
-                    let mut ctx = RegionCtx::new(region, offset);
-                    let assigned_sigs = self
-                        .signatures
-                        .iter()
-                        .map(|&signature| {
-                            if let Some(sig) = signature {
-                                atms_gate
-                                    .schnorr_gate
-                                    .assign_sig(&mut ctx, &Value::known(sig))
-                            } else {
-                                atms_gate.schnorr_gate.assign_dummy_sig(&mut ctx)
-                            }
-                        })
-                        .collect::<Result<Vec<_>, Error>>()?;
-                    let assigned_pks = self
-                        .pks
-                        .iter()
-                        .map(|&pk| {
-                            atms_gate
-                                .schnorr_gate
-                                .ecc_gate
-                                .witness_point(&mut ctx, &Value::known(pk))
-                        })
-                        .collect::<Result<Vec<_>, Error>>()?;
-
-                    // We assign cells to be compared against the PI
-                    let pi_cells = atms_gate
-                        .schnorr_gate
-                        .ecc_gate
-                        .main_gate
-                        .assign_values_slice(
-                            &mut ctx,
-                            &[
-                                Value::known(self.pks_comm),
-                                Value::known(self.msg),
-                                Value::known(self.threshold),
-                            ],
-                        )?;
-
-                    atms_gate.verify(
-                        &mut ctx,
-                        &assigned_sigs,
-                        &assigned_pks,
-                        &pi_cells[0],
-                        &pi_cells[1],
-                        &pi_cells[2],
-                    )?;
-
-                    Ok(pi_cells)
-                },
-            )?;
-
-            let ecc_gate = atms_gate.schnorr_gate.ecc_gate;
-
-            layouter.constrain_instance(pi_values[0].cell(), ecc_gate.instance_col(), 0)?;
-
-            layouter.constrain_instance(pi_values[1].cell(), ecc_gate.instance_col(), 1)?;
-
-            layouter.constrain_instance(pi_values[2].cell(), ecc_gate.instance_col(), 2)?;
-
-            Ok(())
-        }
-    }
-
     #[test]
     fn atms_signature() {
         // const K: u32 = 22; // we are 600_000 constraints above 2^21
@@ -368,7 +358,7 @@ mod tests {
         let signing_parties = (0..NUM_PARTIES).choose_multiple(&mut rng, THRESHOLD);
         let signatures = generate_signatures(&mut rng, &keypairs, &signing_parties, msg);
 
-        let circuit = TestCircuitAtmsSignature {
+        let circuit = AtmsSignatureCircuit {
             signatures,
             pks,
             pks_comm,
@@ -403,7 +393,7 @@ mod tests {
         let signatures_2 = generate_signatures(&mut rng, &keypairs, &signing_parties_2, msg);
         assert_ne!(signing_parties_1, signing_parties_2);
 
-        let mut circuit = TestCircuitAtmsSignature {
+        let mut circuit = AtmsSignatureCircuit {
             signatures: signatures_1,
             pks: pks.clone(),
             pks_comm,
@@ -452,7 +442,7 @@ mod tests {
         let signing_parties_2 = (0..NUM_PARTIES).choose_multiple(&mut rng, THRESHOLD);
         let signatures_2 = generate_signatures(&mut rng, &keypairs2, &signing_parties_2, msg);
 
-        let mut circuit = TestCircuitAtmsSignature {
+        let mut circuit = AtmsSignatureCircuit {
             signatures: signatures_1,
             pks: pks1,
             pks_comm: pks_comm1,
@@ -502,7 +492,7 @@ mod tests {
         let signing_parties_2 = (0..NUM_PARTIES).choose_multiple(&mut rng, THRESHOLD2);
         let signatures_2 = generate_signatures(&mut rng, &keypairs1, &signing_parties_2, msg);
 
-        let mut circuit = TestCircuitAtmsSignature {
+        let mut circuit = AtmsSignatureCircuit {
             signatures: signatures_1,
             pks: pks1,
             pks_comm: pks_comm1,
@@ -565,7 +555,7 @@ mod tests {
         // Now we have THRESHOLD signatures total, but one is duplicated
         // so only THRESHOLD-1 unique valid signatures
 
-        let circuit = TestCircuitAtmsSignature {
+        let circuit = AtmsSignatureCircuit {
             signatures,
             pks,
             pks_comm,
