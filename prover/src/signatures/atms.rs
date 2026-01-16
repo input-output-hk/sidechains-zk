@@ -9,9 +9,11 @@
 use crate::ecc::chip::{AssignedEccPoint, EccChip, EccConfig, EccInstructions};
 use crate::instructions::MainGateInstructions;
 use crate::rescue::{
-    RescueCrhfGate, RescueCrhfGateConfig, RescueCrhfInstructions, RescueParametersBls,
+    RescueCrhfGate, RescueCrhfGateConfig, RescueCrhfInstructions, RescueParametersBls, RescueSponge,
 };
-use crate::signatures::schnorr::{AssignedSchnorrSignature, SchnorrSig, SchnorrVerifierConfig, SchnorrVerifierGate};
+use crate::signatures::schnorr::{
+    AssignedSchnorrSignature, SchnorrSig, SchnorrVerifierConfig, SchnorrVerifierGate,
+};
 use crate::util::RegionCtx;
 use crate::AssignedValue;
 use blstrs::{Base, Fr as JubjubScalar, JubjubAffine};
@@ -68,9 +70,31 @@ impl AtmsVerifierGate {
     ) -> Result<(), Error> {
         assert_eq!(signatures.len(), pks.len());
 
+        let assigned_zero = self
+            .schnorr_gate
+            .ecc_gate
+            .main_gate
+            .assign_constant(ctx, Base::ZERO)?;
+
         let mut flattened_pks = Vec::new();
         for pk in pks {
             flattened_pks.push(pk.x.clone());
+        }
+
+        // Rescue padding enabled, so always push ONE at the end
+        flattened_pks.push(
+            self.schnorr_gate
+                .ecc_gate
+                .main_gate
+                .assign_constant(ctx, Base::ONE)?,
+        );
+
+        // Pad the input to be multiple of RATE (3 for Rescue over BLS12-381 scalar field)
+        let rate = RescueSponge::<Base, RescueParametersBls>::RATE;
+        let remainder = flattened_pks.len() % rate;
+        if remainder != 0 {
+            let padding_needed = rate - remainder;
+            flattened_pks.extend(vec![assigned_zero.clone(); padding_needed])
         }
 
         let hashed_pks = self
@@ -83,17 +107,8 @@ impl AtmsVerifierGate {
             .main_gate
             .assert_equal(ctx, &hashed_pks, commited_pks)?;
 
-        let mut counter = self
-            .schnorr_gate
-            .ecc_gate
-            .main_gate
-            .assign_constant(ctx, Base::ZERO)?;
-
-        let mut is_enough_sigs = self
-            .schnorr_gate
-            .ecc_gate
-            .main_gate
-            .assign_constant(ctx, Base::ZERO)?;
+        let mut counter = assigned_zero.clone();
+        let mut is_enough_sigs = assigned_zero;
 
         // TODO: currently checks all N signatures, where N is a number of public keys.
         //       Actually we can do better by checking only threshold number of signatures,
@@ -243,7 +258,7 @@ impl Circuit<Base> for AtmsSignatureCircuit {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::rescue::RescueSponge;
+    use crate::rescue::{default_padding, RescueSponge};
     use crate::signatures::primitive::schnorr::Schnorr;
     use crate::signatures::schnorr::SchnorrSig;
     use blake2b_simd::State as Blake2bState;
@@ -281,7 +296,10 @@ mod tests {
     /// Compute commitment to public keys
     fn compute_pks_commitment(pks: &[JubjubAffine]) -> Base {
         let flattened_pks: Vec<Base> = pks.iter().map(|pk| pk.get_u()).collect();
-        RescueSponge::<Base, RescueParametersBls>::hash(&flattened_pks, None)
+        RescueSponge::<Base, RescueParametersBls>::hash(
+            &flattened_pks,
+            Some(default_padding::<Base, RescueParametersBls>),
+        )
     }
 
     /// Generate signatures for selected parties
@@ -370,6 +388,37 @@ mod tests {
 
         let prover =
             MockProver::run(K, &circuit, pi).expect("Failed to run ATMS verifier mock prover");
+
+        prover.assert_satisfied();
+    }
+
+    #[test]
+    fn rescue_padding() {
+        // Make NUM_PARTIES not a multiple of RATE (3 for BLS12-381) to test Rescue padding
+        const NUM_PARTIES: usize = 4;
+        const THRESHOLD: usize = 3;
+
+        let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
+        let msg = Base::random(&mut rng);
+
+        let (keypairs, pks) = generate_keypairs(&mut rng, NUM_PARTIES);
+        let pks_comm = compute_pks_commitment(&pks);
+
+        let signing_parties = (0..NUM_PARTIES).choose_multiple(&mut rng, THRESHOLD);
+        let signatures = generate_signatures(&mut rng, &keypairs, &signing_parties, msg);
+
+        let circuit = AtmsSignatureCircuit {
+            signatures,
+            pks,
+            pks_comm,
+            msg,
+            threshold: Base::from(THRESHOLD as u64),
+        };
+
+        let pi = vec![vec![pks_comm, msg, Base::from(THRESHOLD as u64)]];
+
+        let prover = MockProver::run(k_from_circuit(&circuit), &circuit, pi)
+            .expect("Failed to run ATMS verifier mock prover");
 
         prover.assert_satisfied();
     }

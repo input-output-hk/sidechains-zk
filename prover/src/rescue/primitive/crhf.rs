@@ -6,6 +6,26 @@ use ff::PrimeField;
 // type synonym for a padding function that maps D^* -> D^*
 type PaddingFunction<D> = fn(&[D]) -> Vec<D>;
 
+/// Default padding function that can be used with `RescueSponge::hash()`.
+/// Pads the input to be multiple of RATE (3 for Rescue over BLS12-381 scalar field)
+/// Conforms to Rescue specification (see Padding section): https://eprint.iacr.org/2020/1143.pdf
+pub fn default_padding<F, RP>(input: &[F]) -> Vec<F>
+where
+    F: PrimeField,
+    RP: RescueParameters<F>,
+{
+    let rate = RescueSponge::<F, RP>::RATE;
+    let mut padded_input = input.to_vec();
+    padded_input.push(F::ONE);
+
+    let remainder = padded_input.len() % rate;
+    if remainder != 0 {
+        let padding_needed = rate - remainder;
+        padded_input.extend(vec![F::ZERO; padding_needed]);
+    }
+    padded_input
+}
+
 // input for the sponge which in the rescue case is [F; RATE]
 type IO<D> = [D; 3];
 
