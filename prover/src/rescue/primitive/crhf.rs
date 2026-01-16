@@ -15,11 +15,12 @@ where
     RP: RescueParameters<F>,
 {
     let rate = RescueSponge::<F, RP>::RATE;
-    let remainder = input.len() % rate;
     let mut padded_input = input.to_vec();
+    padded_input.push(F::ONE);
+
+    let remainder = padded_input.len() % rate;
     if remainder != 0 {
-        padded_input.push(F::ONE);
-        let padding_needed = rate - remainder - 1;
+        let padding_needed = rate - remainder;
         padded_input.extend(vec![F::ZERO; padding_needed]);
     }
     padded_input

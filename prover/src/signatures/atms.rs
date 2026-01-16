@@ -81,17 +81,19 @@ impl AtmsVerifierGate {
             flattened_pks.push(pk.x.clone());
         }
 
+        // Rescue padding enabled, so always push ONE at the end
+        flattened_pks.push(
+            self.schnorr_gate
+                .ecc_gate
+                .main_gate
+                .assign_constant(ctx, Base::ONE)?,
+        );
+
         // Pad the input to be multiple of RATE (3 for Rescue over BLS12-381 scalar field)
         let rate = RescueSponge::<Base, RescueParametersBls>::RATE;
-        let remainder = pks.len() % rate;
+        let remainder = flattened_pks.len() % rate;
         if remainder != 0 {
-            flattened_pks.push(
-                self.schnorr_gate
-                    .ecc_gate
-                    .main_gate
-                    .assign_constant(ctx, Base::ONE)?,
-            );
-            let padding_needed = rate - remainder - 1;
+            let padding_needed = rate - remainder;
             flattened_pks.extend(vec![assigned_zero.clone(); padding_needed])
         }
 
