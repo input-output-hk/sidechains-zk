@@ -85,7 +85,13 @@ impl AtmsVerifierGate {
         let rate = RescueSponge::<Base, RescueParametersBls>::RATE;
         let remainder = pks.len() % rate;
         if remainder != 0 {
-            let padding_needed = rate - remainder;
+            flattened_pks.push(
+                self.schnorr_gate
+                    .ecc_gate
+                    .main_gate
+                    .assign_constant(ctx, Base::ONE)?,
+            );
+            let padding_needed = rate - remainder - 1;
             flattened_pks.extend(vec![assigned_zero.clone(); padding_needed])
         }
 
@@ -250,7 +256,7 @@ impl Circuit<Base> for AtmsSignatureCircuit {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::rescue::{zero_padding, RescueSponge};
+    use crate::rescue::{default_padding, RescueSponge};
     use crate::signatures::primitive::schnorr::Schnorr;
     use crate::signatures::schnorr::SchnorrSig;
     use blake2b_simd::State as Blake2bState;
@@ -290,7 +296,7 @@ mod tests {
         let flattened_pks: Vec<Base> = pks.iter().map(|pk| pk.get_u()).collect();
         RescueSponge::<Base, RescueParametersBls>::hash(
             &flattened_pks,
-            Some(zero_padding::<Base, RescueParametersBls>),
+            Some(default_padding::<Base, RescueParametersBls>),
         )
     }
 
@@ -385,7 +391,8 @@ mod tests {
     }
 
     #[test]
-    fn atms_signature_non_divisible_by_3() {
+    fn rescue_padding() {
+        // Make NUM_PARTIES not a multiple of RATE (3 for BLS12-381) to test Rescue padding
         const NUM_PARTIES: usize = 4;
         const THRESHOLD: usize = 3;
 
