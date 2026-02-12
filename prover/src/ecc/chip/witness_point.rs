@@ -6,16 +6,15 @@ use group::prime::PrimeCurveAffine;
 use crate::ecc::chip::add::EDWARDS_D;
 use crate::ecc::chip::AffinePoint;
 use crate::util::RegionCtx;
-use halo2_proofs::{
+use ff::Field;
+use midnight_curves::{Base as JubjubBase, JubjubAffine};
+use midnight_proofs::{
     circuit::{AssignedCell, Region, Value},
     plonk::{
-        Advice, Column, ConstraintSystem, Constraints, Error, Expression, Selector,
-        VirtualCells,
+        Advice, Column, ConstraintSystem, Constraints, Error, Expression, Selector, VirtualCells,
     },
     poly::Rotation,
 };
-use blstrs::{Base as JubjubBase, JubjubAffine};
-use ff::Field;
 
 type Coordinates = (
     AssignedCell<JubjubBase, JubjubBase>,
@@ -67,10 +66,13 @@ impl Config {
             // of the form `q_point * (x * curve_eqn)`, but this was implemented without
             // parentheses, and thus evaluates as `(q_point * x) * curve_eqn`, which is
             // structurally different in the pinned verifying key.
-            [
-                ("x == 0 v on_curve", q_point.clone() * x * curve_eqn(meta)),
-                ("y == 0 v on_curve", q_point * y * curve_eqn(meta)),
-            ]
+            Constraints::without_selector(
+                [
+                    q_point.clone() * x * curve_eqn(meta),
+                    q_point * y * curve_eqn(meta),
+                ]
+                .to_vec(),
+            )
         });
 
         config

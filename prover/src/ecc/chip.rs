@@ -1,11 +1,11 @@
 //! Chip implementations for the ECC gadgets.
 
-use blstrs::{Base as JubjubBase, Fr as JubjubScalar, JubjubAffine};
 use ff::{Field, PrimeField};
 use group::prime::PrimeCurveAffine;
 use group::{Curve, Group};
-use halo2_proofs::plonk::Instance;
-use halo2_proofs::{
+use midnight_curves::{Base as JubjubBase, Fr as JubjubScalar, JubjubAffine};
+use midnight_proofs::plonk::Instance;
+use midnight_proofs::{
     circuit::{Chip, Layouter, Value},
     plonk::{Advice, Column, ConstraintSystem, Error},
 };
@@ -401,9 +401,9 @@ impl EccInstructions<JubjubAffine> for EccChip {
         base: &Self::Point,
     ) -> Result<Self::Point, Error> {
         // Decompose scalar into bits
-        let mut decomposition = self
-            .main_gate
-            .to_bits(ctx, &scalar.0, JubjubBase::NUM_BITS as usize)?;
+        let mut decomposition =
+            self.main_gate
+                .to_bits(ctx, &scalar.0, JubjubBase::NUM_BITS as usize)?;
         decomposition.reverse(); // to get MSB first
 
         // Initialise the aggregator at zero
@@ -524,7 +524,11 @@ impl EccInstructions<JubjubAffine> for EccChip {
         ctx.constrain_equal(b2.cell(), bit_2.cell())?;
 
         // Selector of the result
-        ctx.assign_fixed(|| "Res x selector", self.main_gate.config.se, -JubjubBase::ONE)?;
+        ctx.assign_fixed(
+            || "Res x selector",
+            self.main_gate.config.se,
+            -JubjubBase::ONE,
+        )?;
 
         ctx.assign_fixed(|| "A coeff", self.main_gate.config.sa, a_1.x())?;
         ctx.assign_fixed(|| "B coeff", self.main_gate.config.sb, a_2.x())?;
@@ -569,10 +573,22 @@ impl EccInstructions<JubjubAffine> for EccChip {
         ctx.constrain_equal(b2.cell(), bit_2.cell())?;
 
         // Selector of the result
-        ctx.assign_fixed(|| "Res y selector", self.main_gate.config.se, -JubjubBase::ONE)?;
+        ctx.assign_fixed(
+            || "Res y selector",
+            self.main_gate.config.se,
+            -JubjubBase::ONE,
+        )?;
 
-        ctx.assign_fixed(|| "A coeff", self.main_gate.config.sa, a_1.y() - JubjubBase::ONE)?;
-        ctx.assign_fixed(|| "B coeff", self.main_gate.config.sb, a_2.y() - JubjubBase::ONE)?;
+        ctx.assign_fixed(
+            || "A coeff",
+            self.main_gate.config.sa,
+            a_1.y() - JubjubBase::ONE,
+        )?;
+        ctx.assign_fixed(
+            || "B coeff",
+            self.main_gate.config.sb,
+            a_2.y() - JubjubBase::ONE,
+        )?;
 
         ctx.assign_fixed(
             || "multiplication factor",
@@ -580,7 +596,11 @@ impl EccInstructions<JubjubAffine> for EccChip {
             a_3.y() - a_2.y() - a_1.y() + JubjubBase::ONE,
         )?;
 
-        ctx.assign_fixed(|| "s_constant", self.main_gate.config.s_constant, JubjubBase::ONE)?;
+        ctx.assign_fixed(
+            || "s_constant",
+            self.main_gate.config.s_constant,
+            JubjubBase::ONE,
+        )?;
 
         ctx.next();
 
@@ -602,20 +622,26 @@ impl EccInstructions<JubjubAffine> for EccChip {
             .collect::<Vec<JubjubAffine>>();
         let base_points_2 = (0..l_prime)
             .map(|power| {
-                base.mul(JubjubScalar::from(2) * JubjubScalar::from(4).pow_vartime(&[power as u64, 0, 0, 0]))
-                    .to_affine()
+                base.mul(
+                    JubjubScalar::from(2)
+                        * JubjubScalar::from(4).pow_vartime(&[power as u64, 0, 0, 0]),
+                )
+                .to_affine()
             })
             .collect::<Vec<JubjubAffine>>();
         let base_points_3 = (0..l_prime)
             .map(|power| {
-                base.mul(JubjubScalar::from(3) * JubjubScalar::from(4).pow_vartime(&[power as u64, 0, 0, 0]))
-                    .to_affine()
+                base.mul(
+                    JubjubScalar::from(3)
+                        * JubjubScalar::from(4).pow_vartime(&[power as u64, 0, 0, 0]),
+                )
+                .to_affine()
             })
             .collect::<Vec<JubjubAffine>>();
 
-        let scalar_binary = self
-            .main_gate
-            .to_bits(ctx, &scalar.0, JubjubScalar::NUM_BITS as usize)?;
+        let scalar_binary =
+            self.main_gate
+                .to_bits(ctx, &scalar.0, JubjubScalar::NUM_BITS as usize)?;
 
         let mut acc = self.point_selection(
             ctx,
@@ -666,13 +692,15 @@ mod tests {
     use crate::ecc::chip::{AffinePoint, EccChip, EccConfig, EccInstructions};
     use crate::main_gate::{MainGate, MainGateConfig};
     use crate::util::RegionCtx;
-    use blstrs::{Base as JubjubBase, Fr as JubjubScalar, JubjubAffine, JubjubExtended, JubjubSubgroup};
     use ff::Field;
     use group::prime::PrimeCurveAffine;
     use group::{Curve, Group};
-    use halo2_proofs::circuit::{Layouter, SimpleFloorPlanner, Value};
-    use halo2_proofs::dev::MockProver;
-    use halo2_proofs::plonk::{Circuit, ConstraintSystem, Error};
+    use midnight_curves::{
+        Base as JubjubBase, Fr as JubjubScalar, JubjubAffine, JubjubExtended, JubjubSubgroup,
+    };
+    use midnight_proofs::circuit::{Layouter, SimpleFloorPlanner, Value};
+    use midnight_proofs::dev::MockProver;
+    use midnight_proofs::plonk::{Circuit, ConstraintSystem, Error};
     use rand_chacha::ChaCha8Rng;
     use rand_core::SeedableRng;
     use std::ops::Mul;
@@ -692,6 +720,8 @@ mod tests {
     impl Circuit<JubjubBase> for TestCircuit {
         type Config = TestCircuitConfig;
         type FloorPlanner = SimpleFloorPlanner;
+        #[cfg(feature = "circuit-params")]
+        type Params = ();
 
         fn without_witnesses(&self) -> Self {
             Self::default()
@@ -816,6 +846,8 @@ mod tests {
     impl Circuit<JubjubBase> for TestCircuitFixed {
         type Config = TestCircuitConfig;
         type FloorPlanner = SimpleFloorPlanner;
+        #[cfg(feature = "circuit-params")]
+        type Params = ();
 
         fn without_witnesses(&self) -> Self {
             Self::default()

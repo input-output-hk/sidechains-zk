@@ -2,21 +2,21 @@
  Here we provide an example to demonstrate how ATMS circuit is used.
  ```rust
  use ff::Field;
- use halo2_proofs::poly::commitment::Params;
- use halo2_proofs::{
+  use midnight_proofs::poly::commitment::Params;
+ use midnight_proofs::{
      circuit::{Layouter, SimpleFloorPlanner, Value},
      plonk::{create_proof, keygen_pk, keygen_vk, Circuit, ConstraintSystem, Error},
      poly::{commitment::Guard, kzg::params::ParamsKZG},
      transcript::{CircuitTranscript, Transcript},
  };
- use blstrs::{Bls12, JubjubAffine as AffinePoint, Base, JubjubExtended as ExtendedPoint, JubjubSubgroup as SubgroupPoint};
+ use midnight_curves::{Bls12, JubjubAffine as AffinePoint, Base, JubjubExtended as ExtendedPoint, JubjubSubgroup as SubgroupPoint};
  use rand::prelude::IteratorRandom;
  use rand_core::SeedableRng;
  use std::fs::{create_dir_all, File};
  use std::io::{BufReader, Write};
  use std::path::Path;
  use group::Group;
- use halo2_proofs::dev::MockProver;
+ use midnight_proofs::dev::MockProver;
  use crate::atms_halo2::ecc::chip::EccInstructions;
  use crate::atms_halo2::instructions::MainGateInstructions;
  use crate::atms_halo2::rescue::{default_padding, RescueParametersBls, RescueSponge};
@@ -42,6 +42,8 @@
  impl Circuit<Base> for TestCircuitAtmsSignature {
      type Config = TestCircuitConfig;
      type FloorPlanner = SimpleFloorPlanner;
+     #[cfg(feature = "circuit-params")]
+     type Params = ();
 
      fn without_witnesses(&self) -> Self {
          Self::default()

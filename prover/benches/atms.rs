@@ -8,14 +8,14 @@ use atms_halo2::{
     util::RegionCtx,
 };
 use blake2b_simd::State as Blake2bState;
-use blstrs::{Base, JubjubAffine as AffinePoint};
-use blstrs::Bls12;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use ff::Field;
-use halo2_proofs::plonk::k_from_circuit;
-use halo2_proofs::poly::kzg::KZGCommitmentScheme;
-use halo2_proofs::utils::SerdeFormat;
-use halo2_proofs::{
+use midnight_curves::Bls12;
+use midnight_curves::{Base, JubjubAffine as AffinePoint};
+use midnight_proofs::plonk::k_from_circuit;
+use midnight_proofs::poly::kzg::KZGCommitmentScheme;
+use midnight_proofs::utils::SerdeFormat;
+use midnight_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{create_proof, keygen_pk, keygen_vk, Circuit, ConstraintSystem, Error},
     poly::kzg::params::ParamsKZG,
@@ -45,6 +45,8 @@ struct BenchCircuitAtmsSignature {
 impl Circuit<Base> for BenchCircuitAtmsSignature {
     type Config = BenchCircuitConfig;
     type FloorPlanner = SimpleFloorPlanner;
+    #[cfg(feature = "circuit-params")]
+    type Params = ();
 
     fn without_witnesses(&self) -> Self {
         Self::default()
@@ -76,9 +78,7 @@ impl Circuit<Base> for BenchCircuitAtmsSignature {
                                 .schnorr_gate
                                 .assign_sig(&mut ctx, &Value::known(sig))
                         } else {
-                            atms_gate
-                                .schnorr_gate
-                                .assign_dummy_sig(&mut ctx)
+                            atms_gate.schnorr_gate.assign_dummy_sig(&mut ctx)
                         }
                     })
                     .collect::<Result<Vec<_>, Error>>()?;
@@ -180,7 +180,9 @@ fn atms_bench_helper(c: &mut Criterion, num_parties: usize, threshold: usize) {
         let kzg_params = ParamsKZG::<Bls12>::unsafe_setup(k, &mut rng);
         let mut buf = Vec::new();
 
-        kzg_params.write_custom(&mut buf, SerdeFormat::RawBytesUnchecked).expect("Failed to write params");
+        kzg_params
+            .write_custom(&mut buf, SerdeFormat::RawBytesUnchecked)
+            .expect("Failed to write params");
 
         let mut file =
             File::create(Path::new(&params_path)).expect("Failed to create sha256_params");
@@ -191,7 +193,11 @@ fn atms_bench_helper(c: &mut Criterion, num_parties: usize, threshold: usize) {
 
     let params_fs = File::open(Path::new(&params_path)).expect("couldn't load sha256_params");
 
-    let kzg_params = ParamsKZG::<Bls12>::read_custom(&mut BufReader::new(params_fs), SerdeFormat::RawBytesUnchecked).expect("Failed to read params");
+    let kzg_params = ParamsKZG::<Bls12>::read_custom(
+        &mut BufReader::new(params_fs),
+        SerdeFormat::RawBytesUnchecked,
+    )
+    .expect("Failed to read params");
 
     // let kzg_params: ParamsKZG<Bls12> = ParamsKZG::<Bls12>::unsafe_setup(k, rng.clone());
     let vk = keygen_vk(&kzg_params, &circuit).unwrap();
@@ -202,10 +208,12 @@ fn atms_bench_helper(c: &mut Criterion, num_parties: usize, threshold: usize) {
         b.iter(|| {
             let mut transcript: CircuitTranscript<Blake2bState> =
                 CircuitTranscript::<Blake2bState>::init();
+            let nb_committed_instances = 0;
             create_proof::<Base, KZGCommitmentScheme<_>, _, _>(
                 &kzg_params,
                 &pk,
                 &[circuit.clone()],
+                nb_committed_instances,
                 &[&[&[pks_comm, msg, Base::from(threshold as u64)]]],
                 &mut rng,
                 &mut transcript,
@@ -218,7 +226,7 @@ fn atms_bench_helper(c: &mut Criterion, num_parties: usize, threshold: usize) {
 }
 
 fn atms_3_of_6(c: &mut Criterion) {
-    atms_bench_helper(c,6, 3)
+    atms_bench_helper(c, 6, 3)
 }
 fn atms_6_of_9(c: &mut Criterion) {
     atms_bench_helper(c, 9, 6)

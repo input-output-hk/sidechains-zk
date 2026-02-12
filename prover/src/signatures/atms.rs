@@ -16,10 +16,10 @@ use crate::signatures::schnorr::{
 };
 use crate::util::RegionCtx;
 use crate::AssignedValue;
-use blstrs::{Base, Fr as JubjubScalar, JubjubAffine};
 use ff::Field;
-use halo2_proofs::circuit::{Chip, Layouter, SimpleFloorPlanner, Value};
-use halo2_proofs::plonk::{Circuit, ConstraintSystem, Error};
+use midnight_curves::{Base, Fr as JubjubScalar, JubjubAffine};
+use midnight_proofs::circuit::{Chip, Layouter, SimpleFloorPlanner, Value};
+use midnight_proofs::plonk::{Circuit, ConstraintSystem, Error};
 
 /// Configuration for `AtmsVerifierGate`.
 ///
@@ -173,6 +173,8 @@ pub struct AtmsSignatureCircuit {
 impl Circuit<Base> for AtmsSignatureCircuit {
     type Config = AtmsVerifierConfig;
     type FloorPlanner = SimpleFloorPlanner;
+    #[cfg(feature = "circuit-params")]
+    type Params = ();
 
     fn without_witnesses(&self) -> Self {
         Self::default()
@@ -262,18 +264,19 @@ mod tests {
     use crate::signatures::primitive::schnorr::Schnorr;
     use crate::signatures::schnorr::SchnorrSig;
     use blake2b_simd::State as Blake2bState;
-    use blstrs::{Bls12, JubjubAffine, JubjubExtended, JubjubSubgroup};
     use group::{Curve, Group};
-    use halo2_proofs::circuit::{Layouter, SimpleFloorPlanner};
-    use halo2_proofs::dev::MockProver;
-    use halo2_proofs::plonk::k_from_circuit;
-    use halo2_proofs::poly::kzg::KZGCommitmentScheme;
-    use halo2_proofs::utils::SerdeFormat;
-    use halo2_proofs::{
-        plonk::{create_proof, keygen_pk, keygen_vk, prepare, Circuit, ProvingKey, VerifyingKey},
-        poly::{commitment::Guard, kzg::params::ParamsKZG},
-        transcript::{CircuitTranscript, Transcript},
+    use midnight_curves::{Bls12, Fr, JubjubAffine, JubjubExtended, JubjubSubgroup};
+    use midnight_proofs::circuit::{Layouter, SimpleFloorPlanner};
+    use midnight_proofs::dev::MockProver;
+    use midnight_proofs::plonk::{
+        create_proof, k_from_circuit, keygen_pk, keygen_vk, prepare, Circuit, ProvingKey,
+        VerifyingKey,
     };
+    use midnight_proofs::poly::{
+        commitment::Guard, kzg::params::ParamsKZG, kzg::KZGCommitmentScheme,
+    };
+    use midnight_proofs::transcript::{CircuitTranscript, Transcript};
+    use midnight_proofs::utils::SerdeFormat;
     use rand::prelude::IteratorRandom;
     use rand_chacha::ChaCha8Rng;
     use rand_core::SeedableRng;
@@ -287,7 +290,7 @@ mod tests {
     fn generate_keypairs<R: rand_core::RngCore + rand_core::CryptoRng>(
         rng: &mut R,
         num_parties: usize,
-    ) -> (Vec<(blstrs::Fr, JubjubAffine)>, Vec<JubjubAffine>) {
+    ) -> (Vec<(Fr, JubjubAffine)>, Vec<JubjubAffine>) {
         let keypairs: Vec<_> = (0..num_parties).map(|_| Schnorr::keygen(rng)).collect();
         let pks = keypairs.iter().map(|(_, pk)| *pk).collect();
         (keypairs, pks)
@@ -305,7 +308,7 @@ mod tests {
     /// Generate signatures for selected parties
     fn generate_signatures<R: rand_core::RngCore + rand_core::CryptoRng>(
         rng: &mut R,
-        keypairs: &[(blstrs::Fr, JubjubAffine)],
+        keypairs: &[(Fr, JubjubAffine)],
         signing_parties: &[usize],
         msg: Base,
     ) -> Vec<Option<SchnorrSig>> {
@@ -330,11 +333,13 @@ mod tests {
         public_inputs: &[&[&[Base]]],
     ) -> Result<(), String> {
         let mut transcript = CircuitTranscript::<Blake2bState>::init();
+        let nb_committed_instances = 0;
 
         create_proof::<Base, KZGCommitmentScheme<_>, _, _>(
             params,
             pk,
             &[circuit],
+            nb_committed_instances,
             public_inputs,
             rng,
             &mut transcript,
@@ -347,6 +352,7 @@ mod tests {
 
         let verifier = prepare::<_, KZGCommitmentScheme<Bls12>, CircuitTranscript<Blake2bState>>(
             vk,
+            &[&[]],
             public_inputs,
             &mut transcript_verifier,
         )

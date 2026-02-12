@@ -6,7 +6,7 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 
-use halo2_proofs::circuit::AssignedCell;
+use midnight_proofs::circuit::AssignedCell;
 
 pub mod ecc;
 pub mod instructions;
@@ -15,9 +15,9 @@ pub mod rescue;
 pub mod signatures;
 
 mod c_api;
+pub mod docs;
 mod proof;
 pub mod util;
-pub mod docs;
 
 /// AssignedValue
 pub type AssignedValue<F> = AssignedCell<F, F>;

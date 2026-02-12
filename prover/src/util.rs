@@ -1,8 +1,8 @@
 //! Utilities for numeric operations.
 
 use ff::PrimeField;
-use halo2_proofs::plonk::Instance;
-use halo2_proofs::{
+use midnight_proofs::plonk::Instance;
+use midnight_proofs::{
     circuit::{AssignedCell, Cell, Region, Value},
     plonk::{Advice, Column, Error, Fixed, Selector},
 };

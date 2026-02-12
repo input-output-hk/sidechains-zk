@@ -12,9 +12,9 @@ use crate::{AssignedCondition, AssignedValue};
 use ff::{Field, PrimeField};
 use group::prime::PrimeCurveAffine;
 use group::{Curve, Group};
-use halo2_proofs::circuit::{Chip, Value};
-use halo2_proofs::plonk::{ConstraintSystem, Error};
-use blstrs::{Base, Fr as JubjubScalar, JubjubAffine, JubjubExtended, JubjubSubgroup};
+use midnight_curves::{Base, Fr as JubjubScalar, JubjubAffine, JubjubExtended, JubjubSubgroup};
+use midnight_proofs::circuit::{Chip, Value};
+use midnight_proofs::plonk::{ConstraintSystem, Error};
 use num_integer::Integer;
 
 /// Type of an Assigned Schnorr Signature
@@ -116,7 +116,7 @@ impl SchnorrVerifierGate {
         let input_hash = [signature.0.x.clone(), pk.x.clone(), msg.clone()];
         let challenge = self.rescue_hash_gate.hash(ctx, &input_hash)?; //  larger than mod with high prob
 
-        let lhs = self.combined_mul(ctx, &signature.1.0, &challenge, &assigned_generator, pk)?;
+        let lhs = self.combined_mul(ctx, &signature.1 .0, &challenge, &assigned_generator, pk)?;
 
         Ok((lhs, signature.0.clone()))
     }
@@ -133,8 +133,7 @@ impl SchnorrVerifierGate {
         msg: &AssignedValue<Base>,
     ) -> Result<(), Error> {
         let (lhs, signature0) = self.verify_prepare(ctx, signature, pk, msg)?;
-        self.ecc_gate
-            .constrain_equal(ctx, &lhs, &signature0)?;
+        self.ecc_gate.constrain_equal(ctx, &lhs, &signature0)?;
         Ok(())
     }
 
@@ -389,11 +388,10 @@ mod tests {
     use crate::signatures::primitive::schnorr::Schnorr;
     use ff::Field;
     use group::{Curve, Group};
-    use halo2_proofs::circuit::{Layouter, SimpleFloorPlanner};
-    use halo2_proofs::dev::MockProver;
-    use halo2_proofs::plonk::Circuit;
-    use blstrs::{JubjubExtended, Fr as JubjubScalar};
-    use halo2curves::CurveAffine;
+    use midnight_curves::{CurveAffine, Fr as JubjubScalar, JubjubExtended};
+    use midnight_proofs::circuit::{Layouter, SimpleFloorPlanner};
+    use midnight_proofs::dev::MockProver;
+    use midnight_proofs::plonk::Circuit;
     use rand_chacha::ChaCha8Rng;
     use rand_core::SeedableRng;
     use std::ops::Mul;
@@ -414,6 +412,8 @@ mod tests {
     impl Circuit<Base> for TestCircuitSignature {
         type Config = TestCircuitConfig;
         type FloorPlanner = SimpleFloorPlanner;
+        #[cfg(feature = "circuit-params")]
+        type Params = ();
 
         fn without_witnesses(&self) -> Self {
             Self::default()
@@ -450,7 +450,12 @@ mod tests {
                         .ecc_gate
                         .witness_point(&mut ctx, &Value::known(self.pk))?;
 
-                    schnorr_gate.assert_verify(&mut ctx, &assigned_sig, &assigned_pk, &assigned_msg)?;
+                    schnorr_gate.assert_verify(
+                        &mut ctx,
+                        &assigned_sig,
+                        &assigned_pk,
+                        &assigned_msg,
+                    )?;
 
                     // We could test with hashing the PIs, but that limits us more wrt to testing (different pk, different msg)
                     // rescue_hash_gate.hash(&mut ctx, &[assigned_pk.x, assigned_pk.y, assigned_msg])
