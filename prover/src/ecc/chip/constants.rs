@@ -5,8 +5,8 @@ use group::{
     ff::{Field, PrimeField},
     Curve,
 };
-use halo2_proofs::utils::arithmetic::lagrange_interpolate;
-use blstrs::{Fr as JubjubScalar};
+use midnight_curves::Fr as JubjubScalar;
+use midnight_proofs::utils::arithmetic::lagrange_interpolate;
 
 /// Window size for fixed-base scalar multiplication
 pub const FIXED_BASE_WINDOW_SIZE: usize = 3;

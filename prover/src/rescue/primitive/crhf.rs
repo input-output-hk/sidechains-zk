@@ -141,7 +141,7 @@ where
 mod tests {
     use super::*;
     use crate::rescue::{primitive::RescueParametersBls, test_vectors};
-    use blstrs::Scalar;
+    use midnight_curves::bls12_381::Fq as Scalar;
 
     #[test]
     fn test_rescue_crhf_pallas() {

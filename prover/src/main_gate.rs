@@ -15,10 +15,12 @@
 use crate::instructions::{CombinationOptionCommon, MainGateInstructions, Term};
 use crate::util::{pow_5, RegionCtx};
 use crate::{AssignedCondition, AssignedValue};
-use halo2_proofs::circuit::{Chip, Layouter, Value};
-use halo2_proofs::plonk::{Advice, Column, ConstraintSystem, Error, Expression, Fixed, Instance};
-use halo2_proofs::poly::Rotation;
-use halo2curves::ff::PrimeField;
+use ff::PrimeField;
+use midnight_proofs::circuit::{Chip, Layouter, Value};
+use midnight_proofs::plonk::{
+    Advice, Column, ConstraintSystem, Constraints, Error, Expression, Fixed, Instance,
+};
+use midnight_proofs::poly::Rotation;
 use std::iter;
 use std::marker::PhantomData;
 
@@ -640,7 +642,7 @@ impl<F: PrimeField> MainGate<F> {
                 val.clone() * val.clone() * val.clone() * val.clone() * val
             };
 
-            vec![
+            Constraints::without_selector(vec![
                 a.clone() * sa
                     + b.clone() * sb
                     + c.clone() * sc
@@ -654,7 +656,7 @@ impl<F: PrimeField> MainGate<F> {
                     + pow_5(b) * q_h2
                     + pow_5(c) * q_h3
                     + pow_5(d) * q_h4,
-            ]
+            ])
         });
 
         let config = MainGateConfig {

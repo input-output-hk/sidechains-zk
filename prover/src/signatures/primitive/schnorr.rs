@@ -7,15 +7,15 @@
 //! Visit [Documentation][crate::docs::schnorr] for the
 //! algorithm explanation.
 
+use crate::ecc::chip::AffinePoint;
 use crate::rescue::{RescueParametersBls, RescueSponge};
 use crate::signatures::schnorr::SchnorrSig;
 use ff::Field;
 use group::{Curve, Group};
-use blstrs::{JubjubAffine, Base, JubjubExtended, Fr as JubJubScalar, JubjubSubgroup};
+use midnight_curves::{Base, Fr as JubJubScalar, JubjubAffine, JubjubExtended, JubjubSubgroup};
 use rand_core::{CryptoRng, RngCore};
 use std::fmt::Error;
 use std::ops::{Add, Mul};
-use crate::ecc::chip::AffinePoint;
 
 #[derive(Debug)]
 pub struct Schnorr;
@@ -51,11 +51,7 @@ impl Schnorr {
         let k = JubJubScalar::random(rng);
         let announcement = generator().mul(k).to_affine();
 
-        let input_hash = [
-            announcement.x(),
-            key_pair.1.x(),
-            msg,
-        ];
+        let input_hash = [announcement.x(), key_pair.1.x(), msg];
 
         let challenge = RescueSponge::<Base, RescueParametersBls>::hash(&input_hash, None);
 
@@ -72,11 +68,7 @@ impl Schnorr {
     /// See Schnorr signature scheme [$verify$](crate::docs::schnorr#verify) algorithm.
     #[doc = include_str!("../../../docs/signatures/schnorr/primitive-verify.md")]
     pub fn verify(msg: Base, pk: JubjubAffine, sig: SchnorrSig) -> Result<(), Error> {
-        let input_hash = [
-            sig.0.x(),
-            pk.x(),
-            msg,
-        ];
+        let input_hash = [sig.0.x(), pk.x(), msg];
 
         let challenge = RescueSponge::<Base, RescueParametersBls>::hash(&input_hash, None);
 

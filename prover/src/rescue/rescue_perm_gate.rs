@@ -4,7 +4,7 @@
 use std::marker::PhantomData;
 
 use ff::PrimeField;
-use halo2_proofs::{
+use midnight_proofs::{
     circuit::Chip,
     plonk::{ConstraintSystem, Error},
 };
@@ -301,7 +301,9 @@ where
 
 // helper function to transform AssignedRescueState to AssignedRescueStateRef
 // TODO: consider using array_methods when it is more stable
-pub(crate) fn get_refs<F: PrimeField>(state: &AssignedRescueState<F>) -> AssignedRescueStateRef<F> {
+pub(crate) fn get_refs<F: PrimeField>(
+    state: &AssignedRescueState<F>,
+) -> AssignedRescueStateRef<'_, F> {
     // this should never panic since we map [F; N] to [&F: N]
     state.iter().collect::<Vec<_>>().try_into().unwrap()
 }
@@ -466,9 +468,9 @@ where
 // mod tests {
 //     use super::*;
 //     use crate::rescue::test_vectors::*;
-//     use halo2_proofs::circuit::{Layouter, SimpleFloorPlanner, Value};
-//     use halo2_proofs::dev::MockProver;
-//     use halo2_proofs::plonk::Circuit;
+//     use midnight_proofs::circuit::{Layouter, SimpleFloorPlanner, Value};
+//     use midnight_proofs::dev::MockProver;
+//     use midnight_proofs::plonk::Circuit;
 //     use pasta_curves::{Fp, Fq};
 //
 //     #[derive(Clone)]

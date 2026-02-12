@@ -4,7 +4,7 @@ use crate::rescue::{RescuePermGate, RescuePermGateConfig, RescuePermInstructions
 use crate::util::RegionCtx;
 use crate::AssignedValue;
 use ff::PrimeField;
-use halo2_proofs::{
+use midnight_proofs::{
     circuit::{Chip, Value},
     plonk::{ConstraintSystem, Error},
 };
@@ -146,10 +146,10 @@ mod tests {
 
     use super::*;
     use crate::rescue::test_vectors::*;
-    use halo2_proofs::circuit::{Layouter, SimpleFloorPlanner, Value};
-    use halo2_proofs::dev::MockProver;
-    use halo2_proofs::plonk::Circuit;
-    use blstrs::Scalar;
+    use midnight_curves::bls12_381::Fq as Scalar;
+    use midnight_proofs::circuit::{Layouter, SimpleFloorPlanner, Value};
+    use midnight_proofs::dev::MockProver;
+    use midnight_proofs::plonk::Circuit;
 
     #[derive(Clone)]
     struct TestCircuitConfig {

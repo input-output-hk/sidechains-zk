@@ -4,9 +4,8 @@
 //! from [this repo](https://github.com/alexandroszacharakis8/Marvellous)
 //! commit
 
-use blstrs::Scalar;
-
 use super::rescue_parameters::*;
+use midnight_curves::bls12_381::Fq as Scalar;
 
 /// Structure to implement Rescue parameters
 #[derive(Clone, Debug, Default)]

@@ -8,8 +8,8 @@ use super::{
 use crate::instructions::MainGateInstructions;
 use crate::util::RegionCtx;
 use ff::PrimeField;
-use halo2_proofs::circuit::{Chip, Value};
-use halo2_proofs::plonk::{ConstraintSystem, Error};
+use midnight_proofs::circuit::{Chip, Value};
+use midnight_proofs::plonk::{ConstraintSystem, Error};
 
 /// Configuration for RescueCounterModeGate.
 #[derive(Clone, Debug)]
@@ -157,10 +157,10 @@ mod tests {
     use crate::rescue::{RescueBlockCipher, RescueParametersBls, RescueState};
     use crate::util::random_scalar_array;
     use ff::Field;
-    use halo2_proofs::circuit::{Layouter, SimpleFloorPlanner};
-    use halo2_proofs::dev::MockProver;
-    use halo2_proofs::plonk::Circuit;
-    use blstrs::Scalar;
+    use midnight_curves::bls12_381::Fq as Scalar;
+    use midnight_proofs::circuit::{Layouter, SimpleFloorPlanner};
+    use midnight_proofs::dev::MockProver;
+    use midnight_proofs::plonk::Circuit;
     use rand_chacha::ChaCha8Rng;
     use rand_core::SeedableRng;
     use std::marker::PhantomData;
