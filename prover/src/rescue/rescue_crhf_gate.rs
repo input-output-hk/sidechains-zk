@@ -234,7 +234,6 @@ mod tests {
 
     #[test]
     fn test_rescue_crhf_preimage_pasta() {
-        const K: u32 = 10;
         BLS_SPONGE_TEST_VECTORS.iter().for_each(|test_vec| {
             let circuit = TestCircuitPreimage::<Scalar, RescueParametersBls> {
                 // hash input is the witness
@@ -248,7 +247,7 @@ mod tests {
             // hash output is the public input
             let pi = vec![vec![correct_result]];
 
-            let prover = MockProver::run(K, &circuit, pi).expect("Failed to run mock prover");
+            let prover = MockProver::run(&circuit, pi).expect("Failed to run mock prover");
 
             assert!(prover.verify().is_ok());
         });

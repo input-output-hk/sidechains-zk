@@ -577,7 +577,7 @@ where
 //             // hash output is the public input
 //             let pi = vec![permuted.into()];
 //
-//             let prover = MockProver::run(K, &circuit, pi).expect("Failed to run mock prover");
+//             let prover = MockProver::run(&circuit, pi).expect("Failed to run mock prover");
 //
 //             assert!(prover.verify().is_ok());
 //         })
@@ -600,7 +600,7 @@ where
 //             // hash output is the public input
 //             let pi = vec![permuted.into()];
 //
-//             let prover = MockProver::run(K, &circuit, pi).expect("Failed to run mock prover");
+//             let prover = MockProver::run(&circuit, pi).expect("Failed to run mock prover");
 //
 //             assert!(prover.verify().is_ok());
 //         })
@@ -742,7 +742,7 @@ where
 //
 //         let pi = vec![chained.into()];
 //
-//         let prover = MockProver::run(K, &circuit, pi).expect("Failed to run mock prover");
+//         let prover = MockProver::run(&circuit, pi).expect("Failed to run mock prover");
 //
 //         assert!(prover.verify().is_ok());
 //     }
@@ -795,7 +795,7 @@ where
 //
 //         let pi = vec![chained.into()];
 //
-//         let prover = MockProver::run(K, &circuit, pi).expect("Failed to run mock prover");
+//         let prover = MockProver::run(&circuit, pi).expect("Failed to run mock prover");
 //
 //         assert!(prover.verify().is_ok());
 //     }
@@ -913,7 +913,7 @@ where
 //             // hash output is the public input
 //             let pi = vec![permuted.into()];
 //
-//             let prover = MockProver::run(K, &circuit, pi).expect("Failed to run mock prover");
+//             let prover = MockProver::run(&circuit, pi).expect("Failed to run mock prover");
 //
 //             assert!(prover.verify().is_ok());
 //         })
@@ -937,7 +937,7 @@ where
 //             // hash output is the public input
 //             let pi = vec![permuted.into()];
 //
-//             let prover = MockProver::run(K, &circuit, pi).expect("Failed to run mock prover");
+//             let prover = MockProver::run(&circuit, pi).expect("Failed to run mock prover");
 //
 //             assert!(prover.verify().is_ok());
 //         })

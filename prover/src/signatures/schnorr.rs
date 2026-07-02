@@ -477,8 +477,6 @@ mod tests {
 
     #[test]
     fn schnorr_signature() {
-        const K: u32 = 12;
-
         let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
         let (sk, pk) = Schnorr::keygen(&mut rng);
         let msg = Base::random(&mut rng);
@@ -490,7 +488,7 @@ mod tests {
         let pi = vec![vec![pk.get_u(), pk.get_v(), msg]];
 
         let prover =
-            MockProver::run(K, &circuit, pi).expect("Failed to run Schnorr verifier mock prover");
+            MockProver::run(&circuit, pi).expect("Failed to run Schnorr verifier mock prover");
 
         prover.assert_satisfied();
         assert!(prover.verify().is_ok());
@@ -500,8 +498,7 @@ mod tests {
 
         let pi = vec![vec![pk.get_u(), pk.get_v(), msg_fake]];
 
-        let prover =
-            MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
+        let prover = MockProver::run(&circuit, pi).expect("Failed to run EC addition mock prover");
 
         assert!(prover.verify().is_err());
 
@@ -510,8 +507,7 @@ mod tests {
 
         let pi = vec![vec![pk_fake.get_u(), pk_fake.get_v(), msg]];
 
-        let prover =
-            MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
+        let prover = MockProver::run(&circuit, pi).expect("Failed to run EC addition mock prover");
 
         assert!(prover.verify().is_err());
     }

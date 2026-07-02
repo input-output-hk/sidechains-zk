@@ -341,8 +341,8 @@ mod tests {
             &[circuit],
             nb_committed_instances,
             public_inputs,
-            rng,
             &mut transcript,
+            rng,
         )
         .map_err(|e| format!("proof generation failed: {:?}", e))?;
 
@@ -369,7 +369,6 @@ mod tests {
         // const NUM_PARTIES: usize = 2001; // todo: multiple of three so Rescue does not complain. We should do some padding
         // const THRESHOLD: usize = 1602;
 
-        const K: u32 = 19;
         const NUM_PARTIES: usize = 102;
         const THRESHOLD: usize = 72;
 
@@ -393,7 +392,7 @@ mod tests {
         let pi = vec![vec![pks_comm, msg, Base::from(THRESHOLD as u64)]];
 
         let prover =
-            MockProver::run(K, &circuit, pi).expect("Failed to run ATMS verifier mock prover");
+            MockProver::run(&circuit, pi).expect("Failed to run ATMS verifier mock prover");
 
         prover.assert_satisfied();
     }
@@ -423,8 +422,8 @@ mod tests {
 
         let pi = vec![vec![pks_comm, msg, Base::from(THRESHOLD as u64)]];
 
-        let prover = MockProver::run(k_from_circuit(&circuit), &circuit, pi)
-            .expect("Failed to run ATMS verifier mock prover");
+        let prover =
+            MockProver::run(&circuit, pi).expect("Failed to run ATMS verifier mock prover");
 
         prover.assert_satisfied();
     }
@@ -619,8 +618,8 @@ mod tests {
         };
 
         let pi = vec![vec![pks_comm, msg, Base::from(THRESHOLD as u64)]];
-        let prover = MockProver::run(k_from_circuit(&circuit), &circuit, pi)
-            .expect("Failed to run ATMS verifier mock prover");
+        let prover =
+            MockProver::run(&circuit, pi).expect("Failed to run ATMS verifier mock prover");
 
         assert!(
             prover.verify().is_err(),

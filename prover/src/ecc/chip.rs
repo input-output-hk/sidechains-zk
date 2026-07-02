@@ -777,8 +777,6 @@ mod tests {
 
     #[test]
     fn test_ec_mul() {
-        const K: u32 = 11;
-
         let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
         let point = JubjubExtended::random(&mut rng);
         let scalar = JubjubScalar::random(&mut rng);
@@ -792,8 +790,7 @@ mod tests {
         let res_coords = res.to_affine();
         let pi = vec![vec![res_coords.x(), res_coords.y()]];
 
-        let prover =
-            MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
+        let prover = MockProver::run(&circuit, pi).expect("Failed to run EC addition mock prover");
 
         prover.verify().unwrap();
         assert!(prover.verify().is_ok());
@@ -803,8 +800,7 @@ mod tests {
 
         let pi = vec![vec![random_res_coords.x(), random_res_coords.y()]];
 
-        let prover =
-            MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
+        let prover = MockProver::run(&circuit, pi).expect("Failed to run EC addition mock prover");
 
         assert!(prover.verify().is_err());
 
@@ -818,8 +814,7 @@ mod tests {
         let res_coords = point.to_affine();
         let pi = vec![vec![res_coords.x(), res_coords.y()]];
 
-        let prover =
-            MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
+        let prover = MockProver::run(&circuit, pi).expect("Failed to run EC addition mock prover");
 
         assert!(prover.verify().is_ok());
 
@@ -832,8 +827,7 @@ mod tests {
 
         let pi = vec![vec![JubjubBase::ZERO, JubjubBase::ONE]];
 
-        let prover =
-            MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
+        let prover = MockProver::run(&circuit, pi).expect("Failed to run EC addition mock prover");
 
         assert!(prover.verify().is_ok());
     }
@@ -917,8 +911,7 @@ mod tests {
         let res_coords = res.to_affine();
         let pi = vec![vec![res_coords.x(), res_coords.y()]];
 
-        let prover =
-            MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
+        let prover = MockProver::run(&circuit, pi).expect("Failed to run EC addition mock prover");
 
         prover.verify().unwrap();
         assert!(prover.verify().is_ok());
@@ -928,8 +921,7 @@ mod tests {
 
         let pi = vec![vec![random_res_coords.x(), random_res_coords.y()]];
 
-        let prover =
-            MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
+        let prover = MockProver::run(&circuit, pi).expect("Failed to run EC addition mock prover");
 
         assert!(prover.verify().is_err());
 
@@ -940,8 +932,7 @@ mod tests {
         let res_coords = point.to_affine();
         let pi = vec![vec![res_coords.x(), res_coords.y()]];
 
-        let prover =
-            MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
+        let prover = MockProver::run(&circuit, pi).expect("Failed to run EC addition mock prover");
 
         assert!(prover.verify().is_ok());
 
@@ -951,8 +942,7 @@ mod tests {
 
         let pi = vec![vec![JubjubBase::ZERO, JubjubBase::ONE]];
 
-        let prover =
-            MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
+        let prover = MockProver::run(&circuit, pi).expect("Failed to run EC addition mock prover");
 
         assert!(prover.verify().is_ok());
     }

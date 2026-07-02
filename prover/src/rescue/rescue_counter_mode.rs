@@ -293,7 +293,6 @@ mod tests {
 
     #[test]
     fn test_encrypt() {
-        const K: u32 = 10;
         let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
         let key = RescueBlockCipher::<Scalar, RescueParametersBls>::keygen(&mut rng);
 
@@ -312,12 +311,12 @@ mod tests {
 
         let pi = vec![ctxt.concat()];
 
-        let prover = MockProver::run(K, &circuit, pi).expect("Failed to run mock prover");
+        let prover = MockProver::run(&circuit, pi).expect("Failed to run mock prover");
 
         assert!(prover.verify().is_ok());
 
         let pi = vec![vec![Scalar::random(&mut rng); 4]];
-        let prover = MockProver::run(K, &circuit, pi).expect("Failed to run mock prover");
+        let prover = MockProver::run(&circuit, pi).expect("Failed to run mock prover");
 
         assert!(prover.verify().is_err());
     }
@@ -467,7 +466,6 @@ mod tests {
 
     #[test]
     fn test_encrypt_msg_pi() {
-        const K: u32 = 11;
         let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
         let key = RescueBlockCipher::<Scalar, RescueParametersBls>::keygen(&mut rng);
 
@@ -487,7 +485,7 @@ mod tests {
 
         let pi = vec![[msg.concat(), ctxt.to_vec().concat()].concat()];
 
-        let prover = MockProver::run(K, &circuit, pi).expect("Failed to run mock prover");
+        let prover = MockProver::run(&circuit, pi).expect("Failed to run mock prover");
 
         assert!(prover.verify().is_ok());
 
@@ -502,7 +500,7 @@ mod tests {
             random_scalar_array::<4, Scalar, &mut ChaCha8Rng>(&mut rng).to_vec(),
         ]
         .concat()];
-        let prover = MockProver::run(K, &circuit, pi).expect("Failed to run mock prover");
+        let prover = MockProver::run(&circuit, pi).expect("Failed to run mock prover");
 
         assert!(prover.verify().is_err());
     }

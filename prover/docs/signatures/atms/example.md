@@ -137,7 +137,6 @@ fn main() {
      // const NUM_PARTIES: usize = 2001; // todo: multiple of three so Rescue does not complain. We should do some padding
      // const THRESHOLD: usize = 1602;
 
-     const K: u32 = 19;
      const NUM_PARTIES: usize = 102;
      const THRESHOLD: usize = 72;
 
@@ -180,7 +179,7 @@ fn main() {
      let pi = vec![vec![pks_comm, msg, Base::from(THRESHOLD as u64)]];
 
      let prover =
-         MockProver::run(K, &circuit, pi).expect("Failed to run ATMS verifier mock prover");
+         MockProver::run(&circuit, pi).expect("Failed to run ATMS verifier mock prover");
 
      prover.assert_satisfied();
 }
