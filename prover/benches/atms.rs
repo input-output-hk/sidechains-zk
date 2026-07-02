@@ -215,8 +215,8 @@ fn atms_bench_helper(c: &mut Criterion, num_parties: usize, threshold: usize) {
                 &[circuit.clone()],
                 nb_committed_instances,
                 &[&[&[pks_comm, msg, Base::from(threshold as u64)]]],
-                &mut rng,
                 &mut transcript,
+                &mut rng,
             )
             .expect("proof generation should not fail");
 

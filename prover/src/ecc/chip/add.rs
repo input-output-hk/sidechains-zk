@@ -307,8 +307,6 @@ mod tests {
 
     #[test]
     fn test_ec_addition() {
-        const K: u32 = 4;
-
         // useful for debugging
         let _print_coords = |a: JubjubExtended, name: &str| {
             println!("Coordinates {name}: {:?}", a.to_affine());
@@ -327,8 +325,7 @@ mod tests {
         let res_coords = res.to_affine();
         let pi = vec![vec![res_coords.x(), res_coords.y()]];
 
-        let prover =
-            MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
+        let prover = MockProver::run(&circuit, pi).expect("Failed to run EC addition mock prover");
 
         prover.verify().unwrap();
         assert!(prover.verify().is_ok());
@@ -339,7 +336,7 @@ mod tests {
         // let pi = vec![vec![*random_res_coords.x(), *random_res_coords.y()]];
         //
         // let prover =
-        //     MockProver::run(K, &circuit, pi).expect("Failed to run EC addition mock prover");
+        //     MockProver::run(&circuit, pi).expect("Failed to run EC addition mock prover");
         //
         // assert!(prover.verify().is_err());
         //
@@ -354,7 +351,7 @@ mod tests {
         // let pi = vec![vec![*res_coords.x(), *res_coords.y()]];
         //
         // let prover =
-        //     MockProver::run(K, &circuit, pi).expect("Failed to run EC add with equal points");
+        //     MockProver::run(&circuit, pi).expect("Failed to run EC add with equal points");
         //
         // assert!(prover.verify().is_ok());
         //
@@ -369,7 +366,7 @@ mod tests {
         // let pi = vec![vec![*res_coords.x(), *res_coords.y()]];
         //
         // let prover =
-        //     MockProver::run(K, &circuit, pi).expect("Failed to run EC add with equal points");
+        //     MockProver::run(&circuit, pi).expect("Failed to run EC add with equal points");
         //
         // assert!(prover.verify().is_ok());
     }
