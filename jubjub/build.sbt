@@ -1,33 +1,13 @@
-ThisBuild / version := "0.1.0-SNAPSHOT"
-
 ThisBuild / scalaVersion := "2.13.10"
 
 val `scala-2.13`        = "2.13.10"
-val sidechainsZkVersion = "0.0.5"
+val sidechainsZkVersion = "0.0.6"
+
+ThisBuild / version := sidechainsZkVersion
 
 val rootDirectory = file(".")
 
 sbtJniCoreScope := Compile
-
-lazy val publicationSettings = List(
-  publish / skip := false,
-  isSnapshot := git.gitUncommittedChanges.value || !git.gitCurrentTags.value.contains("v" + sidechainsZkVersion),
-  versionScheme := Some("early-semver"),
-  publishTo := {
-    val nexus = "https://nexus.iog.solutions"
-    if (isSnapshot.value) Some("snapshots".at(nexus + "/repository/maven-snapshot/"))
-    else Some("releases".at(nexus + "/repository/maven-release/"))
-  },
-  credentials += Credentials(
-    "Sonatype Nexus Repository Manager",
-    "nexus.iog.solutions",
-    sys.env.getOrElse("NEXUS_USERNAME", ""),
-    sys.env.getOrElse("NEXUS_PASSWORD", "")
-  ),
-  version := {
-    if (isSnapshot.value) sidechainsZkVersion + "-SNAPSHOT" else sidechainsZkVersion
-  }
-)
 
 lazy val jubjubNative = project
   .in(file("jubjub-native"))
@@ -35,23 +15,19 @@ lazy val jubjubNative = project
     name := "jubjub-native",
     nativeCompile / sourceDirectory := sourceDirectory.value / "native"
   )
-  .settings(publicationSettings)
   .enablePlugins(JniNative)
 
 lazy val jubjubBindings = project
   .in(file("jubjub-bindings"))
   .settings(commonSettings("jubjub-bindings"))
   .settings(libraryDependencies ++= Dependencies.testing)
-  .settings(publicationSettings)
   .dependsOn(jubjubNative)
 
 lazy val root = project
   .in(rootDirectory)
   .settings(
-    name := "sidechains-zk",
-    publish / skip := true
+    name := "sidechains-zk"
   )
-  .settings(publicationSettings)
   .aggregate(
     jubjubNative,
     jubjubBindings
@@ -69,7 +45,6 @@ val baseScalacOptions = Seq(
 
 def commonSettings(projectName: String): Seq[sbt.Def.Setting[_]] = Seq(
   name := projectName,
-  version := sidechainsZkVersion,
   crossScalaVersions := List(`scala-2.13`),
   semanticdbEnabled := true,                        // enable SemanticDB
   semanticdbVersion := scalafixSemanticdb.revision, // use Scalafix compatible version
@@ -78,9 +53,7 @@ def commonSettings(projectName: String): Seq[sbt.Def.Setting[_]] = Seq(
   Compile / doc / sources := Nil,
   Compile / packageDoc / publishArtifact := false,
   libraryDependencies ++= Dependencies.betterMonadicFor,
-  libraryDependencies += compilerPlugin(Dependencies.kindProjectorPlugin.cross(CrossVersion.full)),
-  // Only publish selected libraries.
-  publish / skip := true
+  libraryDependencies += compilerPlugin(Dependencies.kindProjectorPlugin.cross(CrossVersion.full))
 ) ++
   inConfig(IntegrationTest)(Defaults.itSettings) ++
   inConfig(IntegrationTest)(org.scalafmt.sbt.ScalafmtPlugin.scalafmtConfigSettings) ++
@@ -88,18 +61,6 @@ def commonSettings(projectName: String): Seq[sbt.Def.Setting[_]] = Seq(
 
 inThisBuild(
   List(
-    isSnapshot := git.gitUncommittedChanges.value || !git.gitCurrentTags.value.contains("v" + sidechainsZkVersion),
-    publishTo := {
-      val nexus = "https://nexus.iog.solutions"
-      if (isSnapshot.value) Some("snapshots".at(nexus + "/repository/maven-snapshot/"))
-      else Some("releases".at(nexus + "/repository/maven-release/"))
-    },
-    credentials += Credentials(
-      "Sonatype Nexus Repository Manager",
-      "nexus.iog.solutions",
-      sys.env.getOrElse("NEXUS_USERNAME", "default-nexus-username"),
-      sys.env.getOrElse("NEXUS_PASSWORD", "default-nexus-password")
-    ),
     organization := "io.iohk.sidechains",
     developers := List(
       Developer(
@@ -120,10 +81,6 @@ inThisBuild(
     scalaVersion := `scala-2.13`,
     scalafixScalaBinaryVersion := CrossVersion.binaryScalaVersion(
       scalaVersion.value
-    ),
-    resolvers ++= Seq(
-      "IOG Nexus".at("https://nexus.iog.solutions/repository/maven-release/"),
-      "Sonatype OSS Snapshots".at("https://oss.sonatype.org/content/repositories/snapshots")
     ),
     scalafixDependencies ++= List(
       "com.github.liancheng" %% "organize-imports" % "0.6.0",
